@@ -54,8 +54,14 @@ markdown **chronicle export**.
 ## Connecting your own model
 
 The **⚙ Machinery** panel takes any OpenAI-compatible endpoint (llama-swap, LiteLLM, etc.)
-or Anthropic in-app. The full brain — improvised combat, ghostwritten milestones, whisper
-interpretation — lights up when a model answers.
+or Anthropic in-app. Point the base URL at your server (e.g. `http://localhost:8080/v1`) and
+set the model to one your server lists. The full brain — improvised combat, ghostwritten
+milestones, whisper interpretation — lights up when a model answers.
+
+> **Reasoning models:** keep **disable thinking** on (it is by default). The game makes many
+> short-budget calls; a reasoning model's `<think>` pass eats that budget and returns *empty*
+> content. The toggle sends `chat_template_kwargs: {enable_thinking: false}`, which llama.cpp
+> and vLLM honor and other servers ignore.
 
 > **Caveat:** the hosted GitHub Pages build is served over HTTPS, which blocks fetches to
 > plain-HTTP LAN endpoints (mixed-content). To use a local model, **download `index.html`
