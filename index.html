@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMOTE Ⅱ — a zero-player picaresque, deluxe</title>
+<style>
+  :root{
+    --ink:#221a10; --parch:#efdfb8; --parch2:#e4d0a0; --parchdk:#c9b280;
+    --night:#191228; --night2:#241a3a; --panel:#2a2040;
+    --gold:#f0b840; --golddk:#b98a1e; --blood:#d04430; --holy:#8fd0ff;
+    --hp:#e05540; --xp:#8fc46a; --gp:#8fd0ff; --qq:#f0b840;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--night);color:var(--parch);
+    font-family:'VT323','Courier New',monospace;font-size:19px;line-height:1.3;
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .btn{font-family:inherit;font-size:19px;color:var(--parch);background:var(--panel);
+    border:2px solid #000;box-shadow:inset 0 0 0 2px #4a3a70;padding:3px 14px;cursor:pointer;}
+  .btn:hover{background:#38295c;color:#fff;}
+  .btn.active{background:var(--gold);color:#221a10;box-shadow:inset 0 0 0 2px #8a6a20;}
+  .btn:disabled{opacity:0.4;cursor:default;}
+  #topbar{display:flex;align-items:center;gap:14px;padding:8px 14px;background:var(--night2);
+    border-bottom:4px solid #000;flex-wrap:wrap;flex:0 0 auto;}
+  #topbar .title{color:var(--gold);font-size:26px;letter-spacing:4px;text-shadow:0 2px 0 #000;}
+  .stat{color:var(--parch);}.stat b{color:var(--gold);}
+  #metab{color:#8d84a8;font-size:15px;}
+  #main{display:flex;flex:1 1 auto;min-height:0;}
+  #left{flex:1 1 58%;display:flex;flex-direction:column;min-width:0;}
+  #scenewrap{flex:1 1 auto;position:relative;background:#000;min-height:0;overflow:hidden;}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
+  #caption{position:absolute;left:12px;bottom:10px;color:#cfc4e8;font-size:16px;
+    text-shadow:0 2px 3px #000;pointer-events:none;max-width:85%;}
+  #bars{flex:0 0 auto;background:var(--night2);border-top:4px solid #000;padding:8px 14px;
+    display:grid;grid-template-columns:70px 1fr 60px;gap:4px 10px;align-items:center;}
+  #bars label{color:#8d84a8;font-size:16px;text-align:right;}
+  .track{height:14px;background:#120d20;border:2px solid #000;position:relative;}
+  .track i{display:block;height:100%;transition:width .4s;}
+  .track span{position:absolute;inset:0;text-align:center;font-size:13px;line-height:12px;
+    color:#fff;text-shadow:0 1px 2px #000;}
+  #bars .num{color:var(--parch);font-size:16px;}
+  #verbs{flex:0 0 auto;display:flex;gap:10px;padding:10px 14px;background:var(--night2);
+    border-top:4px solid #000;align-items:center;}
+  #voice{flex:1;font-family:inherit;font-size:18px;background:#120d20;color:var(--parch);
+    border:2px solid #000;padding:5px 10px;}
+  #gpwrap{display:flex;align-items:center;gap:8px;}
+  #gpbar{width:120px;height:14px;background:#120d20;border:2px solid #000;}
+  #gpbar i{display:block;height:100%;background:var(--gp);}
+  #right{flex:1 1 42%;min-width:360px;display:flex;flex-direction:column;
+    border-left:4px solid #000;background:var(--parch);color:var(--ink);}
+  #diaryhead{flex:0 0 auto;padding:10px 16px 6px;background:var(--parch2);
+    border-bottom:3px solid var(--parchdk);display:flex;align-items:baseline;gap:12px;}
+  #diaryhead h2{font-size:24px;letter-spacing:2px;color:#5a3a10;}
+  #diaryhead .sub{color:#8a6a3a;font-size:15px;flex:1;}
+  #b-export{font-size:15px;background:none;border:1px solid var(--parchdk);color:#8a6a3a;
+    font-family:inherit;padding:1px 8px;cursor:pointer;}
+  #b-export:hover{background:var(--parchdk);color:#402808;}
+  #tabs{display:flex;flex:0 0 auto;background:var(--parch2);border-bottom:3px solid var(--parchdk);}
+  #tabs .tab{flex:1;text-align:center;padding:4px;cursor:pointer;color:#8a6a3a;font-size:17px;}
+  #tabs .tab.active{color:#402808;background:var(--parch);font-weight:bold;}
+  .pane{flex:1 1 auto;overflow-y:auto;padding:12px 18px;}
+  .entry{margin:0 0 12px;}
+  .entry .when{color:#a5824a;font-size:14px;}
+  .entry .txt{color:#33230e;}
+  .entry.holy .txt{color:#1e4a7a;font-style:italic;}
+  .entry.smite .txt{color:#8a2010;font-style:italic;}
+  .entry.mile .txt{color:#402808;font-weight:bold;}
+  .entry.banter .txt{color:#3a5a2a;font-style:italic;}
+  .pane h3{color:#5a3a10;font-size:19px;margin:10px 0 4px;border-bottom:1px solid var(--parchdk);}
+  .pane .row{display:flex;justify-content:space-between;margin:2px 0;}
+  .pane .dim{color:#8a6a3a;}
+  .pane .loot{color:#33230e;}
+  .pane .scripture{color:#33230e;font-style:italic;margin:6px 0;}
+  .meter{height:10px;background:#d9c28a;border:1px solid var(--parchdk);position:relative;margin:4px 0;}
+  .meter i{display:block;height:100%;}
+  .meter b{position:absolute;top:-3px;width:2px;height:16px;background:#402808;left:50%;}
+  ::-webkit-scrollbar{width:12px;}
+  .pane::-webkit-scrollbar-thumb{background:var(--parchdk);border:2px solid var(--parch2);}
+  ::-webkit-scrollbar-thumb{background:#4a3a70;border:2px solid #000;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  #settings{position:fixed;inset:0;background:rgba(8,6,16,0.8);display:none;
+    align-items:center;justify-content:center;z-index:20;}
+  #settingsbox{width:min(520px,92vw);max-height:86vh;overflow-y:auto;background:var(--panel);
+    border:2px solid #000;box-shadow:inset 0 0 0 2px #4a3a70,0 8px 30px #000;padding:16px;}
+  #settingsbox h3{color:var(--gold);font-size:22px;margin-bottom:8px;}
+  .setrow{display:flex;align-items:center;gap:10px;margin:6px 0;}
+  .setrow label{flex:0 0 140px;color:#8d84a8;font-size:16px;}
+  .setrow input,.setrow select{flex:1;font-family:inherit;font-size:16px;background:#120d20;
+    color:var(--parch);border:2px solid #000;padding:3px 8px;min-width:0;}
+  .setrow input[type=checkbox]{flex:0;transform:scale(1.3);}
+  #testresult{font-size:15px;color:#8d84a8;min-height:20px;flex:1;}
+  .setnote{font-size:14px;color:#6d6488;margin:8px 0;line-height:1.35;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="title">SMOTE Ⅱ</span>
+  <span class="stat" id="ui-hero">—</span>
+  <span class="stat">Lv <b id="ui-level">1</b></span>
+  <span class="stat">Gold <b id="ui-gold">0</b></span>
+  <span class="stat">Bricks <b id="ui-bricks">0</b>/100</span>
+  <span class="stat" id="ui-mood">—</span>
+  <span id="metab"></span>
+  <span style="flex:1"></span>
+  <button class="btn" id="b-pause">❚❚</button>
+  <button class="btn active" id="b-live">LIVE</button>
+  <button class="btn" id="b-rush">RUSH ≫</button>
+  <button class="btn" id="b-gear">⚙</button>
+  <button class="btn" id="b-shake" title="a new hero, a new world">New Hero</button>
+</div>
+
+<div id="main">
+  <div id="left">
+    <div id="scenewrap"><canvas id="cv"></canvas><div id="caption"></div></div>
+    <div id="bars">
+      <label>health</label><div class="track"><i id="bar-hp" style="background:var(--hp)"></i><span id="txt-hp"></span></div><div class="num" id="num-hp"></div>
+      <label>quest</label><div class="track"><i id="bar-q" style="background:var(--qq)"></i><span id="txt-q"></span></div><div class="num" id="num-q"></div>
+      <label>experience</label><div class="track"><i id="bar-xp" style="background:var(--xp)"></i><span id="txt-xp"></span></div><div class="num" id="num-xp"></div>
+    </div>
+    <div id="verbs">
+      <button class="btn" id="b-bless" title="25 godpower">☀ Encourage</button>
+      <button class="btn" id="b-smite" title="25 godpower">⚡ Punish</button>
+      <input id="voice" placeholder="voice of god… e.g. 'stop hoarding turnips and finish the quest'">
+      <button class="btn" id="b-voice" title="20 godpower">Speak</button>
+      <div id="gpwrap"><span style="color:#8d84a8;font-size:15px">godpower</span>
+        <div id="gpbar"><i id="gp-i"></i></div><span id="gp-num" class="stat"></span></div>
+    </div>
+  </div>
+  <div id="right">
+    <div id="diaryhead"><h2>THE DIARY</h2><span class="sub" id="ui-motto">—</span>
+      <button id="b-export" title="the shipping department">💾 export</button></div>
+    <div id="tabs">
+      <div class="tab active" data-tab="diary">Diary</div>
+      <div class="tab" data-tab="sheet">Hero</div>
+      <div class="tab" data-tab="theo">Theology</div>
+    </div>
+    <div class="pane" id="diary"></div>
+    <div class="pane" id="sheet" style="display:none"></div>
+    <div class="pane" id="theo" style="display:none"></div>
+  </div>
+</div>
+
+<div id="settings"><div id="settingsbox">
+  <h3>⚙ The Machinery</h3>
+  <div class="setrow"><label>provider</label>
+    <select id="set-provider">
+      <option value="openai">OpenAI-compatible (llama-swap / LiteLLM)</option>
+      <option value="anthropic">Anthropic (in-app)</option>
+    </select></div>
+  <div class="setrow"><label>base URL</label><input type="text" id="set-baseurl"></div>
+  <div class="setrow"><label>model</label><input type="text" id="set-model"></div>
+  <div class="setrow"><label>API key</label><input type="password" id="set-apikey"></div>
+  <div class="setrow"><label>temperature</label><input type="number" id="set-temp" min="0" max="2" step="0.1"></div>
+  <div class="setrow"><label>LLM brain on</label><input type="checkbox" id="set-usellm"></div>
+  <div class="setrow"><button class="btn" id="set-test">Test</button><div id="testresult"></div></div>
+  <div class="setnote">Voice chain: your endpoint → Anthropic in-app → the old ways (templates).
+    Inside claude.ai the sandbox blocks LAN fetches; download the file and run it locally to use
+    your own model. &lt;think&gt; blocks are stripped. Settings survive New Hero.</div>
+  <div class="setrow" style="justify-content:flex-end;gap:8px;">
+    <button class="btn" id="set-cancel">Cancel</button>
+    <button class="btn active" id="set-save">Save</button></div>
+</div></div>
+
+<script>
+/* =====================================================================
+   SMOTE Ⅱ — the picaresque, deluxe. Still one guy in a window.
+   The substrate (deterministic, seeded) runs the hero's whole life:
+   quests, epics, bosses, items that DO things, companions that live
+   and die, grudges, taverns, weather. The LLM is the ghostwriter —
+   it narrates with memory, running gags, and a seed corpus of the
+   old register; it interprets the Voice of God; it never invents
+   events. The hero models you back: your record of blessings,
+   punishments and silence becomes his working theology, and it
+   colors every entry. Templates cover everything when no model
+   answers — the picaresque never stalls. Persistent. One file.
+   ===================================================================== */
+const CONFIG={storageKey:'smote2-hero-v4',settingsKey:'smote2-settings-v1',
+  liveBeatMs:22000, rushBeatMs:320, gpRegenMs:30000, model:'claude-sonnet-4-6',
+  brickGoal:100, invCap:8};
+/* ---------- settings + storage shim ---------- */
+const SETTINGS={provider:'openai',baseUrl:'http://localhost:8080/v1',
+  model:'qwen3.6-35b-a3b',apiKey:'',temperature:0.9,useLLM:true};
+if(typeof window.storage==='undefined'){
+  window.storage={
+    async get(k){const v=localStorage.getItem(k);return v===null?null:{key:k,value:v};},
+    async set(k,v){localStorage.setItem(k,v);return {key:k,value:v};},
+    async delete(k){localStorage.removeItem(k);return {key:k,deleted:true};},
+    async list(p){return {keys:Object.keys(localStorage).filter(x=>!p||x.startsWith(p))};}};
+}
+async function loadSettings(){try{const r=await window.storage.get(CONFIG.settingsKey);
+  if(r&&r.value)Object.assign(SETTINGS,JSON.parse(r.value));}catch(e){}}
+async function saveSettings(){try{await window.storage.set(CONFIG.settingsKey,JSON.stringify(SETTINGS));}catch(e){}}
+function stripThink(t){return (t||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();}
+/* ---------- PRNG ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+let R=mulberry32(Date.now()%2**31);
+const pick=a=>a[Math.floor(R()*a.length)];
+const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
+const chance=p=>R()<p;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* =====================================================================
+   THE SEED CORPUS — the old register, kept as both fallback tables and
+   few-shot style seeds for the ghostwriter. Paste your own favorite
+   lines (e.g. from the classic zero-player games) into these arrays;
+   the ghostwriter samples them every call to stay in voice.
+   ===================================================================== */
+const HERO_FIRST=['Barnaby','Grunhilda','Percival','Mildred','Osric','Wilhelmina','Cedric','Agatha',
+ 'Bartholomew','Prudence','Ulric','Winifred','Ludo','Hesper','Cormac','Beatrix'];
+const HERO_LAST=['the Approximate','the Unwashed','of the Discount Rack','the Mostly Brave',
+ 'the Allergic','Halfboots','the Redundant','of Lower Puddle','the Insufficient','Thriceblessed',
+ 'the Lukewarm','Oatbane','the Preowned','of the Long Sigh','the Adequate'];
+const CLASSES=['knight-errant (errands mostly)','freelance paladin','licensed loot appraiser',
+ 'itinerant hero (unsalaried)','monster inconveniencer','quest technician','part-time chosen one'];
+const TRAITS=['vain','cowardly-but-lucky','gluttonous','sentimental','pedantic','superstitious',
+ 'chronically optimistic','penny-pinching','melodramatic','easily distracted'];
+const MOTTOS=['Smite me if I\'m wrong','Gold first, glory eventually','This counts as cardio',
+ 'Chosen-ish','Will quest for food','Vaguely destined','My other sword is a spoon'];
+const MONSTERS=['Grammar Nazi','Bipolar Bear','Ninja Tortoise','Sock Puppeteer','Awkward Turtle',
+ 'Dandy Lion','Depressed Panda','Vegan Vampire','Passive-Aggressive Accountant','Unlicensed Gazebo',
+ 'Semi-Rural Sphinx','Off-Brand Dragon','Load-Bearing Mime','Free-Range Bureaucrat','Artisanal Golem',
+ 'Gluten-Free Ghoul','Recently Divorced Basilisk','Existential Chicken','Municipal Kraken',
+ 'Self-Taught Assassin','Decaffeinated Berserker','Haunted-ish Scarecrow','Feral Notary',
+ 'Biodegradable Wombat','Limited Edition Goblin','Subterranean Landlord','Significant Boar'];
+const BOSSES=['the Alpha Moose','the Final Boss (semifinal)','the Tax Dragon','the Middle Manager of Darkness',
+ 'the Grandmother of All Slimes','the Widow of the Previous Hero','the Committee of Doom (quorate)'];
+const LOOT_JUNK=['exclamation marker','collector\'s edition of air','penny with two tails',
+ 'bottled water from the Dead Sea','broken perpetuum mobile','self-cutting scissors',
+ 'unidentified frying object','hair of the dog','manual for a simpler manual','can of dehydrated water',
+ 'non-stick duct tape','glow-in-the-dark shadow','pre-chewed gum of wisdom','receipt for the void',
+ 'folding anvil','gift-wrapped dread','artisanal dirt','emergency mustache','left-handed screwdriver',
+ 'slightly used halo','decorative doom','one (1) ominous pebble','expired blessing','suspiciously heavy feather'];
+const LOOT_USE=[{n:'flask of questionable healing',fx:'heal'},{n:'coupon for one (1) miracle',fx:'heal'},
+ {n:'jar of second wind',fx:'heal'},{n:'pocket sundial (fast)',fx:'hurry'},
+ {n:'map to somewhere else',fx:'hurry'},{n:'bag of holding (small, jingles)',fx:'gold'},
+ {n:'scroll of adequate fireball',fx:'damage'},{n:'lucky rabbit (whole, annoyed)',fx:'luck'}];
+const LOOT_CURSE=['cursed participation trophy','monkey\'s paw (fingers crossed)',
+ 'ring of minor inconvenience','boots of the previous owner','mirror that gossips',
+ 'coin that always lands on edge'];
+const QUESTS=['deliver a suspicious barrel to whoever asks least','find out why the river runs uphill',
+ 'census the local wolves (they object)','return an overdue library curse','escort a pilgrim who knows a shortcut',
+ 'un-haunt the mayor\'s pantry','collect 40 apologies from bandits','audit the wishing well',
+ 'retrieve the sword in the scone','convince the bridge troll to unionize elsewhere',
+ 'map the bottomless pit (bring string)','recover the town\'s stolen Tuesday',
+ 'teach the scarecrow self-confidence','inventory the abyss (shallow end first)',
+ 'deliver a strongly worded letter to the volcano','apologize to the swamp on behalf of the kingdom',
+ 'count the uncountable (round down)','find the middle of nowhere and mark it'];
+const EPICS=[
+ {title:'the Prophecy of the Discount Messiah',steps:['decode the prophecy (it\'s in cursive)',
+   'assemble the three artifacts of mild importance','be at the right place at approximately the right time']},
+ {title:'the War on the Abyss (budget pending)',steps:['petition the abyss for peace',
+   'misplace the petition','win anyway']},
+ {title:'the Great Turnip Crusade',steps:['locate the legendary turnip',
+   'question the legendary turnip','accept the turnip\'s terms']}];
+const TOWNS=['Lower Puddle','Grumblefork','Saint Someone\'s','Mild Peril','Thimbledown','Wetsocks',
+ 'Upper Regret','Bramblegloat','Penny\'s Folly','Dampington'];
+const TAVERNS=['the Sword & Plowshare','the Prancing Poncy','the Headless Landlord','the Last Resort',
+ 'the Foaming Deadline','the Hero\'s Welcome (cash only)'];
+const GEAR_TIER=['rusty','dented','serviceable','polished','engraved','gilded','runed','mythic-adjacent'];
+const GEAR_SLOT={weapon:['ladle','sword','halberd','morningstar','zweihänder'],
+ armor:['tunic','gambeson','chainmail','breastplate','plate harness'],
+ helmet:['cap','kettle helm','sallet','greathelm','crown (found)'],
+ shield:['pot lid','buckler','kite shield','tower shield','door (repurposed)'],
+ boots:['sandals','boots','riding boots','sabatons','seven-league socks']};
+const BIOMES=['meadow','forest','hills','swamp','desert'];
+const PETS=['sun dog','significant otter','dust bunny','santa claws','talking donkey (taciturn)',
+ 'lightsaber-toothed tiger','rocky raccoon','morally gray cat','emotional support raven','pocket goat'];
+const PET_NAMES=['Snack','Chairman','Doreen','Bucket','Sir Reginald','Damp','Invoice','Gravy','Ampersand','Beowulf Jr.'];
+const HUMANS=['a suspicious bard','an off-duty prophet','a retired mime (loud)','an unpaid necromancy intern',
+ 'a freelance damsel','a knight of the rectangular table'];
+/* diary register examples — the ghostwriter is shown three of these per call */
+const DIARY_SEED=[
+ 'Died. Again. Starting to see a pattern here.',
+ 'Level up! I no longer fear death — we\'re practically roommates.',
+ 'Saw a sign: "Adventurers wanted." Felt seen. Kept walking.',
+ 'My sword broke, so I fought with sarcasm. Surprisingly effective.',
+ 'Found three gold coins in the monster\'s pocket. It found none in mine. Capitalism.',
+ 'Dear diary: today I was brave. Dear diary: today I ran. Both true.',
+ 'The tavern keeper knows my name. My god does not answer. Priorities have shifted.',
+ 'Prayed for guidance. Received a pigeon. Interpreting.',
+ 'Traded my dignity for a healing potion. Fair deal, no refunds.',
+ 'The monster and I agreed to call it a draw. The monster is lying somewhere, agreeing.',
+ 'Almost leveled up today. "Almost" is the loneliest word.',
+ 'Rained all day. My armor is now 30% rust, 70% attitude.',
+ 'Note to self: gazebos are load-bearing. All of them are load-bearing.',
+ 'My pet looked at me with pride today. Or hunger. The line is thin.',
+ 'Tried to sell the receipt for the void. The merchant gave me a receipt for the receipt.',
+ 'The temple grows brick by brick. My savings shrink coin by coin. Faith is a ledger.'];
+
+/* ---------- LLM ---------- */
+async function callLLM(system,user,maxTok=300){
+  const ac=new AbortController();const to=setTimeout(()=>ac.abort(),180000);
+  const viaAnthropic=async()=>{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+      headers:{'Content-Type':'application/json'},signal:ac.signal,
+      body:JSON.stringify({model:CONFIG.model,max_tokens:maxTok,system,
+        messages:[{role:'user',content:user}]})});
+    const d=await r.json();
+    return stripThink(d.content.filter(i=>i.type==='text').map(i=>i.text).join('\n'));};
+  try{
+    if(SETTINGS.provider==='openai'&&SETTINGS.baseUrl){
+      try{
+        const url=SETTINGS.baseUrl.replace(/\/+$/,'')+'/chat/completions';
+        const h={'Content-Type':'application/json'};
+        if(SETTINGS.apiKey)h['Authorization']='Bearer '+SETTINGS.apiKey;
+        const r=await fetch(url,{method:'POST',headers:h,signal:ac.signal,
+          body:JSON.stringify({model:SETTINGS.model,max_tokens:maxTok,
+            temperature:SETTINGS.temperature,
+            messages:[{role:'system',content:system},{role:'user',content:user}]})});
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        const d=await r.json();G.voiceVia=SETTINGS.model;
+        return stripThink(d.choices[0].message.content);
+      }catch(e){const out=await viaAnthropic();G.voiceVia=CONFIG.model+' (fallback)';return out;}
+    }
+    const out=await viaAnthropic();G.voiceVia=CONFIG.model;return out;
+  }finally{clearTimeout(to);}
+}
+/* content pools: the brain restocks the bestiary while the seed corpus covers gaps */
+const POOLS={monsters:[],loot:[],quests:[]};
+let refilling={};
+async function refillPool(kind){
+  if(!SETTINGS.useLLM||refilling[kind])return;refilling[kind]=true;
+  const seed=k=>pick(k).replace(/"/g,'');
+  const spec={
+    monsters:`12 absurd fantasy-parody monster names in the spirit of "${seed(MONSTERS)}" or "${seed(MONSTERS)}". 1-4 words each. No numbering.`,
+    loot:`12 absurd RPG junk-loot names in the spirit of "${seed(LOOT_JUNK)}" or "${seed(LOOT_JUNK)}". Lowercase, 2-6 words each.`,
+    quests:`10 absurd fantasy-parody quest objectives in the spirit of "${seed(QUESTS)}" or "${seed(QUESTS)}". Lowercase verb phrases, 4-9 words each.`}[kind];
+  try{
+    const out=await callLLM('You write deadpan fantasy-parody game content. Output ONLY a plain list, one item per line, no numbers, no commentary.',spec,300);
+    const items=out.split('\n').map(s=>s.replace(/^[\-\*\d\.\)\s]+/,'').trim()).filter(s=>s&&s.length<60);
+    if(items.length>=4)POOLS[kind].push(...items);
+  }catch(e){}
+  refilling[kind]=false;
+}
+function draw(kind,fallbackArr){
+  if(POOLS[kind].length<4)refillPool(kind);
+  return POOLS[kind].length?POOLS[kind].shift():pick(fallbackArr);
+}
+
+/* ---------- THE HERO / GAME STATE ---------- */
+let G=null;
+function newHero(){
+  R=mulberry32((Date.now()%2**31)|1);
+  const name=pick(HERO_FIRST)+' '+pick(HERO_LAST);
+  G={v:4,seed:Date.now()%2**31,epoch:Date.now(),beats:0,day:1,
+    hero:{name,cls:pick(CLASSES),trait:pick(TRAITS),trait2:pick(TRAITS),motto:pick(MOTTOS),
+      level:1,xp:0,xpNeed:22,
+      attr:{mig:rnd(2,4),fin:rnd(2,4),wit:rnd(1,3),grd:rnd(2,4)},
+      hp:30,hpMax:30,gold:0,bricks:0,alive:true,deaths:0,mood:60,
+      inv:[],trophies:[],gear:{weapon:0,armor:0,helmet:0,shield:0,boots:0},hangover:0},
+    pet:null,fallen:[],human:null,
+    state:'town',town:pick(TOWNS),tavern:pick(TAVERNS),biome:pick(BIOMES),weather:'clear',
+    quest:null,epic:null,questCount:0,fight:null,grudge:null,bossAtLevel:5,
+    gp:60,lastGpMs:Date.now(),lastWhisper:null,
+    diary:[],gags:[],memories:[],
+    god:{att:10,bless:0,smite:0,voices:0,resur:0,lastActDay:1,belief:''},
+    rival:{name:pick(HERO_FIRST)+' '+pick(HERO_LAST),level:1,score:0,heroScore:0},
+    mode:'live',paused:false,genCount:0,lastGenMs:0,voiceVia:null,pendingSmite:0,pendingBless:0};
+  G.hero.attr[classBias(G.hero.cls)]++;
+  recomputeHp(true);
+  G.god.belief=beliefTemplate();
+  writeEntry('mile',`Day 1. I, ${name}, ${G.hero.cls}, do hereby begin this diary. My god watches. My boots leak. Onward.`);
+  newQuest();
+  save();
+}
+function newQuest(){
+  G.questCount++;
+  /* every 4th quest advances (or starts) an epic */
+  if(G.questCount%4===0){
+    if(!G.epic){const e=pick(EPICS);G.epic={title:e.title,steps:e.steps,step:0};}
+    const text=G.epic.steps[G.epic.step];
+    G.quest={text,epic:true,progress:0,need:rnd(8,12),reward:rnd(30,60)+G.hero.level*6};
+  }else{
+    G.quest={text:draw('quests',QUESTS),epic:false,progress:0,need:rnd(6,10),reward:rnd(15,40)+G.hero.level*5};
+  }
+}
+function gearName(slot){const t=G.hero.gear[slot];
+  return GEAR_TIER[Math.min(t,GEAR_TIER.length-1)]+' '+GEAR_SLOT[slot][Math.min(Math.floor(t/2),GEAR_SLOT[slot].length-1)];}
+function addItem(kind,name,fx){
+  if(G.hero.inv.length>=CONFIG.invCap)G.hero.inv.shift();
+  G.hero.inv.push({n:name,k:kind,fx:fx||null,mishaps:0});
+}
+function remember(txt){G.memories.push({d:G.day,t:txt});if(G.memories.length>12)G.memories.shift();}
+function attBand(){const a=G.god.att;
+  return a>60?'devoted':a>20?'fond of you':a>-20?'ambivalent about you':a>-60?'wary of you':'openly resentful of you';}
+function moodFace(){const m=G.hero.mood;return m>70?'☺':m>40?'😐':'☹';}
+function bumpAtt(d){G.god.att=clamp(G.god.att+d,-100,100);}
+
+/* ---------- THEOLOGY (the hero models you back) ---------- */
+function beliefTemplate(){
+  const g=G.god,a=g.att;
+  const silence=G.day-g.lastActDay;
+  if(silence>6)return 'My god has gone quiet. I keep writing anyway. Someone pays for this ink, and it isn\'t me.';
+  if(a>60)return 'My god is attentive and mostly kind. I walk taller. I also duck less, which may be related.';
+  if(a>20)return 'My god watches and occasionally helps. As arrangements go, I\'ve had worse landlords.';
+  if(a>-20)return 'My god\'s policy remains unclear. I keep a running tally and an open mind. One of them is filling up.';
+  if(a>-60)return 'My god smites first and explains never. I have started flinching at clear skies.';
+  return 'My god is a hazard I happen to worship. The temple is half protection money, if I\'m honest.';
+}
+let beliefBusy=false;
+async function regenBelief(){
+  const tmpl=beliefTemplate();
+  if(!SETTINGS.useLLM||beliefBusy){G.god.belief=tmpl;return;}
+  beliefBusy=true;
+  try{
+    const g=G.god;
+    const out=await callLLM(
+      `You write ONE sentence of a fantasy-parody hero's private working theory about their god, first person, deadpan. Base it ONLY on the record. No quotes.`,
+      `Record: ${g.bless} blessings, ${g.smite} punishments, ${g.voices} divine whispers, ${g.resur} resurrections, ${Math.max(0,G.day-g.lastActDay)} days of silence. Hero is ${attBand().replace('you','their god')}. Deaths so far: ${G.hero.deaths}.`,90);
+    G.god.belief=(out.split('\n')[0]||tmpl).slice(0,220)||tmpl;
+  }catch(e){G.god.belief=tmpl;}
+  beliefBusy=false;
+  if(curTab==='theo')renderTheo();
+}
+
+/* ---------- DIARY ENGINE ---------- */
+function stamp(){const h=new Date().getHours(),m=new Date().getMinutes();
+  return `Day ${G.day}, ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;}
+function writeEntry(kind,txt){
+  G.diary.push({k:kind,t:txt,s:stamp()});
+  if(G.diary.length>400)G.diary.splice(0,100);
+  renderDiary(true);
+}
+let factBuf=[];
+function fact(type,data){factBuf.push({type,data});}
+const TEMPLATES={
+  travel:d=>{
+    const att=G.god.att;
+    const base=[`Walked. The ${G.biome} continues to be extremely ${G.biome}-like.`,
+      `Made progress on the quest to ${G.quest?G.quest.text:'do something'}. My feet have filed a complaint.`,
+      `The road goes ever on. So does my blister.`];
+    if(G.weather==='rain')base.push(`Rain. My armor is developing opinions about it.`,`Rained all day. Morale is damp; so is everything else.`);
+    if(G.weather==='snow')base.push(`Snow. Left heroic footprints. Something is following them.`);
+    if(G.weather==='fog')base.push(`Fog so thick I apologized to a tree. The tree accepted.`);
+    if(att>40)base.push(`Passed a rock shaped like my god. Polished it a little.`);
+    else if(att<-40)base.push(`Passed a rock shaped like my god. Walked around it. Widely.`);
+    else base.push(`Passed a rock shaped like my god. Saluted it, just in case.`);
+    return pick(base);},
+  fight_start:d=>`A wild ${d.m} appears! It looks ${pick(['under-rested','litigious','moist','overconfident','ready'])}.`,
+  boss_start:d=>`The ground shakes. ${d.m} has found me. I have found, in turn, religion.`,
+  fight_win:d=>pick([`Slew the ${d.m}. It dropped ${d.loot?'a '+d.loot:'nothing but expectations'}.`,
+    `The ${d.m} has been defeated. I remain, as ever, mostly intact.`,
+    `Victory over the ${d.m}. Added it to the list of things I never want to see again.`]),
+  boss_win:d=>`${d.m} HAS FALLEN. I took ${d.trophy} as proof. Future generations will exaggerate this correctly.`,
+  fight_flee:d=>`The ${d.m} fled at half strength, shouting something about "round two". I have made a note. So has it.`,
+  grudge_return:d=>`It's back. The ${d.m}, bigger, and it REMEMBERS. Some debts collect themselves.`,
+  grudge_win:d=>`Settled accounts with the ${d.m} for good. Closure smells faintly of ozone.`,
+  fight_steal:d=>`The ${d.m} picked my pocket mid-duel and left. Professional respect. Also: -${d.gold} gold.`,
+  fight_curse:d=>`Beat the ${d.m}, but it cursed me on the way down. Something in my pack just got heavier.`,
+  loot:d=>`Picked up ${d.item}. It will surely be useful, said no one.`,
+  dm_gear:d=>`The spoils, adjudicated from on high: ${d.name} — a real ${d.slot} upgrade. I try to look worthy. I mostly look surprised.`,
+  dm_loot:d=>`Spoils awarded: ${d.name}. It came with a look that said "you'll see."`,
+  use_item:d=>({heal:`Drank the ${d.item}. Tastes like second chances and pond.`,
+    hurry:`Consulted the ${d.item}. Shortcut located. Dignity optional.`,
+    gold:`Shook the ${d.item}. It paid out. I don't ask it questions anymore.`,
+    damage:`Read the ${d.item} AT the monster. Adequate, as advertised.`,
+    luck:`Rubbed the ${d.item}. It bit me, but fortunately.`}[d.fx]||`Used the ${d.item}. Something happened, broadly.`),
+  curse_mishap:d=>pick([`The ${d.item} whispered discouragement all morning.`,
+    `Tripped over nothing. The ${d.item} in my pack felt smug.`,
+    `The ${d.item} rearranged my other belongings into a rude word.`]),
+  curse_discard:d=>`Enough. Threw the ${d.item} into the ${G.biome==='swamp'?'swamp':'nearest ditch'}. It landed comfortably. Good riddance.`,
+  town:d=>pick([`Reached ${G.town}. Sold my pockets' contents to a man with visible disdain. +${d.gold} gold.`,
+    `In ${G.town}. The tavern's soup contains a clue, or possibly a boot.`,
+    `Prayed at the construction site of my god's temple. ${G.hero.bricks}/${CONFIG.brickGoal} bricks. The scaffolding judges me.`]),
+  tavern:d=>pick([`An evening at ${G.tavern}. Spent ${d.gold} gold on ale and testimony.`,
+    `${G.tavern}. The bard sang of heroes. I bought a round to make him stop.`,
+    `Gambled at ${G.tavern}. ${d.won?'Won '+d.gold+' gold. Suspiciously.':'Lost '+d.gold+' gold to a man with an honest face. Rookie mistake.'}`]),
+  hangover:d=>`Morning. My head hosts a small, committed war. The quest can wait an hour.`,
+  gear:d=>`Upgraded my ${d.slot}: behold the ${d.name}. The blacksmith laughed, but respectfully.`,
+  rest:d=>{
+    const r=[`Night. Camped. The fire crackles; something in the dark crackles back.`,
+      `Slept under stars. One of them winked. Suspicious.`];
+    if(G.pet&&G.pet.alive)r.push(`${G.pet.name} took first watch. We both know what that means. Nothing. It means nothing.`);
+    return pick(r);},
+  brick:d=>`A golden brick for the temple! ${G.hero.bricks}/${CONFIG.brickGoal}. My god's house grows. My own remains theoretical.`,
+  quest_done:d=>`QUEST COMPLETE: ${d.q}. Reward: ${d.gold} gold and a firm handshake I did not consent to.`,
+  epic_step:d=>`EPIC PROGRESS: "${d.q}" is done. ${d.title} advances. History clears its throat.`,
+  epic_done:d=>`${d.title.toUpperCase()} IS COMPLETE. The bards have been notified. The turnip sends regards.`,
+  levelup:d=>`LEVEL UP! I am now level ${G.hero.level}. ${d&&d.grew?'My '+d.grew.map(g=>({mig:'might',fin:'finesse',wit:'wits',grd:'grit'}[g])).join(' and ')+' sharpened. ':''}I feel taller. I am not taller.`,
+  death:d=>`I have died. It was the ${d.m}'s fault. Awaiting divine intervention with what patience remains to a corpse.`,
+  death_smite:d=>`Killed by my own god. I want that on the headstone, spelled correctly.`,
+  resurrect:d=>`I live again! Death was restful but the service was poor. One star.`,
+  bless:d=>`A warmth from above! My wounds knit; my spirits soar. Thank you. I knew you were watching. (+${d.heal} hp)`,
+  smite:d=>`LIGHTNING. From MY OWN GOD. Message received, though I dispute its contents. (-${d.dmg} hp)`,
+  duel:d=>d.win?`Dueled ${G.rival.name} on the road. I won! Their face did that thing. Score: me ${G.rival.heroScore}, them ${G.rival.score}.`
+    :`Dueled ${G.rival.name}. Lost. They will be insufferable about this for seasons. Score: me ${G.rival.heroScore}, them ${G.rival.score}.`,
+  taunt:d=>`A letter from ${G.rival.name}, care of a rude pigeon: "${pick(['Heard you died again. Classic.','My god says hi. Mine answers.','Still level '+G.hero.level+'? Adorable.'])}"`,
+  pet:d=>`A ${d.pet} has begun following me. I have named it ${d.petName}. We are bonded now, legally.`,
+  pet_save:d=>`The ${d.pet} took a hit meant for me. It's fine. It's FINE. Extra rations tonight, and no arguments.`,
+  pet_ko:d=>`${d.petName} is limping and rides in the pack today. The pack has never been heavier or more important.`,
+  pet_death:d=>`${d.petName} is gone. Held the line so I could stand up. I am not writing more today.`,
+  pet_mourn:d=>`Found one of ${d.petName}'s hairs on my cloak. Kept it. Shut up.`,
+  human_join:d=>`${d.h} has decided we travel together now. I don't recall being consulted, but the company beats the geese.`,
+  human_leave:d=>`${d.h} left at the crossroads with a bow and, I now notice, my coin purse. Every ballad needs a villain.`,
+  merchant:d=>d.bought?`A roadside merchant sold me ${d.item} for ${d.cost} gold. "No refunds" was tattooed on his neck.`
+    :`A roadside merchant showed me wonders. My purse showed him lint. We parted as equals.`,
+  shrine:d=>G.god.att>20?`Passed a shrine to some other god. Dusted it politely. Mine is better. Mine can hear me. Probably.`
+    :`Passed a shrine to some other god. Lingered. Just looking. A hero can look.`,
+  callback:d=>`Passed a spot that reminded me of ${d.t}. Walked faster.`,
+  silence:d=>`Day ${G.day}. The heavens have been quiet for ${d.n} days. I said something nice about the weather, in case it's a test.`,
+  banter:d=>d.txt,
+};
+async function flushDiary(milestone){
+  if(!factBuf.length)return;
+  const facts=factBuf;factBuf=[];
+  const f=facts[facts.length-1];
+  const tmpl=(TEMPLATES[f.type]||(()=>'Something happened. Probably.'))(f.data||{});
+  const kind=f.type==='bless'?'holy':(f.type==='smite'||f.type==='death_smite')?'smite':
+    f.type==='banter'?'banter':
+    ['quest_done','epic_step','epic_done','levelup','death','brick','duel','pet','pet_death',
+     'boss_win','grudge_win','human_join','human_leave','resurrect','dm_gear'].includes(f.type)?'mile':'plain';
+  if(!milestone||!SETTINGS.useLLM){writeEntry(kind,tmpl);return;}
+  /* ghostwriter: milestones get the brain, seeded with the old register */
+  const h=G.hero;
+  const recent=G.diary.slice(-4).map(e=>'"'+e.t+'"').join(' ');
+  const gag=G.gags.length?`Running gag you may reference: ${pick(G.gags)}.`:'';
+  const mem=G.memories.length?`A memory you may call back to: "${pick(G.memories).t}".`:'';
+  const seeds=[pick(DIARY_SEED),pick(DIARY_SEED),pick(DIARY_SEED)].map(s=>'"'+s+'"').join(' ');
+  const comp=G.pet&&G.pet.alive?`Companion: ${G.pet.name} the ${G.pet.sp}.`:G.human?`Traveling with ${G.human}.`:'';
+  const factsTxt=facts.map(x=>x.type+': '+JSON.stringify(x.data||{})).join('; ');
+  try{
+    setMetab('the ghostwriter dips the quill…');
+    const t0=Date.now();
+    const out=await callLLM(
+      `You ghostwrite the diary of ${h.name}, a ${h.cls} — ${h.trait}, ${h.trait2}. The hero is currently ${attBand()} ("you" = their god, the reader); let that color the tone. Register examples (match this voice, do not copy): ${seeds}. 1-3 short sentences, first person, deadpan. Use ONLY the given facts; never invent events. No quotation marks around the entry.`,
+      `Quest: ${G.quest?G.quest.text:'none'}${G.epic?' (part of '+G.epic.title+')':''}. HP ${h.hp}/${h.hpMax}, gold ${h.gold}, mood ${h.mood}/100, temple ${h.bricks}/${CONFIG.brickGoal}, weather ${G.weather}, biome ${G.biome}. ${comp} ${gag} ${mem} Recent entries: ${recent}
+What just happened (write about the LAST fact, others are context): ${factsTxt}`,180);
+    G.genCount++;G.lastGenMs=Date.now()-t0;setMetab();
+    const txt=out.split('\n')[0]||tmpl;
+    writeEntry(kind,txt.length>10?txt:tmpl);
+    if(chance(0.3)&&f.data){const g=f.data.m||f.data.item||f.data.pet||f.data.trophy||null;
+      if(g&&!G.gags.includes(g)){G.gags.push('the '+g);if(G.gags.length>6)G.gags.shift();}}
+  }catch(e){setMetab();writeEntry(kind,tmpl);}
+}
+
+/* =====================================================================
+   THE NUMBERS + THE COMBAT PIPELINE
+   Four attributes drive everything; every equipment slot keys off one.
+     MIG might   — melee offense
+     FIN finesse — thrown/precise offense, crit, dodge
+     WIT wits    — scrolls, tricks, exploits (offense that ignores your weapon)
+     GRD grit    — max HP and damage reduction
+   Derived: offense, defense, crit%, dodge%, block%. Read them on the
+   Hero sheet; the god who reads the numbers out-predicts the world.
+
+   Combat: ONE model, TWO roles, two contexts — a tabletop game.
+     THE HERO (actor) — the LLM puppeting "the guy" in first person.
+                 Declares a free-text action, ">throw sand then stab", and
+                 may heed a recent god-whisper. Inventive, in-character.
+     THE DUNGEON MASTER — the SAME model wearing the world's hat. It runs
+                 the monsters (picks their moves), rules on how the hero's
+                 action lands, and doles out the spoils (loot and weapons).
+     THE DICE (resolveRound) — deterministic math. The DM frames the odds;
+                 the character sheet + seeded RNG settle the numbers. This
+                 is what keeps the DM honest: no fanfic god-mode wins.
+   The god whispers INTENT, the hero improvises, the DM adjudicates, the
+   dice settle it. Matter is simulated; meaning is improvised.
+   ===================================================================== */
+const FOE_MOVES=['lunges','snaps at a leg','circles warily','tries something underhanded',
+ 'bellows and swings','feints, badly','goes for the satchel','plays dead, unconvincingly',
+ 'rears up','looks for the exit too'];
+function classBias(cls){
+  if(/paladin|knight/.test(cls))return 'mig';
+  if(/appraiser|technician|chosen/.test(cls))return 'wit';
+  if(/inconveniencer|errant|part-time/.test(cls))return 'fin';
+  return 'grd';
+}
+function recomputeHp(full){const h=G.hero;
+  h.hpMax=24+h.level*4+(h.attr?h.attr.grd:3)*3;
+  if(full)h.hp=h.hpMax;else h.hp=Math.min(h.hp,h.hpMax);}
+function rnd0(a,b){return a+R()*(b-a);}
+function computeStats(h){
+  const g=h.gear,a=h.attr||{mig:3,fin:3,wit:2,grd:3};
+  const luck=h.inv.filter(i=>i.fx==='luck').length;
+  const off=a.mig + a.fin*0.5 + g.weapon*1.7;
+  const def=a.grd*0.7 + g.armor*1.3 + g.shield + g.helmet*0.7;
+  const crit=clamp(0.05 + a.fin*0.02 + luck*0.06, 0, 0.6);
+  const dodge=clamp(a.fin*0.012 + g.boots*0.022, 0, 0.4);
+  const block=clamp(g.shield*0.05, 0, 0.5);
+  return {off,def,crit,dodge,block};
+}
+function makeFight(m,opt={}){
+  const h=G.hero,boss=!!opt.boss,grudge=!!opt.grudge;
+  const hp=boss?rnd(26,38)+h.level*5:grudge?rnd(14,20)+h.level*4:rnd(9,15)+h.level*3;
+  return {m,hp,hpMax:hp,rounds:0,boss,grudge,buff:0,foeMove:'',
+    atk:((boss?10:grudge?6.5:3.8)+h.level*(boss?2:1.0))*(h.level<3?0.7:1),
+    def:(boss?1:0.4)+h.level*(boss?0.5:0.28),
+    improv: SETTINGS.useLLM && G.mode!=='rush' && (boss||grudge||chance(0.15))};
+}
+/* SCRIPT — the deterministic resolver. Verdict in, math out. */
+function resolveRound(h,f,v){
+  const S=computeStats(h);
+  const stat=v.stat||'mig',power=clamp(v.power||1,0.3,2.2),special=v.special||'none';
+  let base;
+  if(stat==='wit')base=h.attr.wit*2.2 + h.level*0.6 + S.off*0.2;
+  else if(stat==='grd')base=S.off*0.45;
+  else base=S.off;
+  if(G.pet&&G.pet.alive&&!G.pet.ko)base+=1+G.pet.lvl*0.5;
+  if(G.human)base+=1;
+  if(f.buff>0){base*=1.25;f.buff--;}
+  let effCrit=S.crit + (stat==='fin'?0.12:0) + (v.approach==='thrown'?0.06:0);
+  const res={dmgDealt:0,dmgTaken:0,crit:false,dodged:false,blocked:false,
+    itemUsed:null,heal:0,fled:false,stunned:false,petSaved:false,note:v.note||''};
+  /* item consumption */
+  if(v.item){const it=h.inv.find(i=>i.n===v.item)||h.inv.find(i=>i.fx===v.itemFx);
+    if(it){res.itemUsed=it.n;h.inv=h.inv.filter(i=>i!==it);
+      if(it.fx==='heal')res.heal=rnd(10,18);
+      else if(it.fx==='gold')h.gold+=rnd(5,15);
+      else if(it.fx==='damage')base+=rnd(6,10);
+      else if(it.fx==='luck')effCrit+=0.2;
+      else if(it.fx==='hurry'&&G.quest)G.quest.progress=Math.min(G.quest.need,G.quest.progress+1);}}
+  /* branch by intent */
+  if(res.heal||special==='heal'){
+    if(!res.heal)res.heal=rnd(8,14);
+    h.hp=Math.min(h.hpMax,h.hp+res.heal);
+  }else if(special==='flee'){
+    res.fled=R()<clamp(S.dodge+0.3-(f.boss?0.25:0),0.05,0.9);
+  }else{
+    res.crit=R()<effCrit;
+    const raw=base*power*(res.crit?1.9:1)*rnd0(0.85,1.18);
+    res.dmgDealt=Math.max(1,Math.round(raw-f.def));
+    f.hp-=res.dmgDealt;
+    if(special==='stun'&&R()<clamp(0.3+power*0.15,0,0.7))res.stunned=true;
+    if(special==='buff')f.buff=3;
+  }
+  /* the monster's counter (the DM's chosen move, scaled by its intensity),
+     unless it's down/stunned or we fled. Defense mitigates by a CURVE, not a
+     flat subtraction — so armor never makes you immortal, it buys rounds. */
+  if(!res.fled&&!res.stunned&&f.hp>0){
+    let incoming=f.atk*(v.foeIntensity||1)*rnd0(0.85,1.18)*(special==='defend'?0.35:1);
+    const mitig=16/(16+S.def);
+    const wouldTake=Math.max(1,Math.round(incoming*mitig));
+    if(G.pet&&G.pet.alive&&!G.pet.ko&&(h.hp-wouldTake)<h.hpMax*0.22&&R()<0.5){
+      G.pet.ko=G.day+1;res.petSaved=true;
+    }else if(R()<S.dodge){res.dodged=true;}
+    else if(R()<S.block){res.blocked=true;res.dmgTaken=Math.max(0,Math.round(incoming*mitig*0.4));h.hp-=res.dmgTaken;}
+    else{res.dmgTaken=wouldTake;h.hp-=res.dmgTaken;}
+  }
+  return res;
+}
+/* ACTOR (fallback) — pick a plausible action from the build & the satchel */
+function deterministicTurn(h,f){
+  const heal=h.inv.find(i=>i.fx==='heal'),bomb=h.inv.find(i=>i.fx==='damage');
+  let stat='mig',special='none',item=null,itemFx=null,power=1,approach='melee',action,line;
+  if(h.hp<h.hpMax*0.35&&heal&&chance(0.7)){
+    special='heal';item=heal.n;itemFx='heal';action='drink the '+heal.n;
+    line=`Drank the ${heal.n} mid-swing. Tastes of pond and postponement.`;
+  }else if(bomb&&f.hp>f.hpMax*0.5&&chance(0.4)){
+    item=bomb.n;itemFx='damage';stat='wit';approach='arcane';power=1.2;
+    action='read the '+bomb.n+' at it';line=`Read the ${bomb.n} AT the ${f.m}. Adequate, as billed.`;
+  }else if(f.boss&&h.hp<h.hpMax*0.3&&chance(0.4)){
+    special='defend';stat='grd';power=0.5;action='raise shield and brace';
+    line=`Put everything behind the shield and let the ${f.m} tire itself out.`;
+  }else{
+    const r=R();
+    if(h.attr.fin>=h.attr.mig&&r<0.5){stat='fin';approach='thrown';power=rnd0(0.9,1.3);
+      action=pick(['throw the dagger','quick jab to the flank','feint then strike']);
+      line=pick([`A quick strike at the ${f.m}'s soft bits.`,`Feinted left, hit right. Textbook, if there were a text.`]);}
+    else if(h.attr.wit>h.attr.mig&&r<0.5){stat='wit';approach='trick';power=rnd0(0.8,1.3);
+      action=pick(['exploit its obvious weakness','trip it with a pointed remark','improvise']);
+      line=pick([`Found a loophole in the ${f.m} and exploited it, ethically.`,`Out-thought it. Low bar, cleared.`]);}
+    else{stat='mig';approach='melee';power=rnd0(0.9,1.25);
+      action=pick(['swing the '+GEAR_SLOT.weapon[Math.min(Math.floor(h.gear.weapon/2),4)],'overhead chop','shoulder into it']);
+      line=pick([`Swung hard at the ${f.m}. Follow-through is my one virtue.`,`Hit it with the pointy end. The basics endure.`]);}
+  }
+  return {action,line,verdict:{stat,special,item,itemFx,power,approach,
+    foeMove:pick(FOE_MOVES),foeIntensity:rnd0(0.8,1.2),note:'(the old ways)'}};
+}
+/* THE HERO — the LLM puppets "the guy" in first person; may heed the god */
+async function actorLLM(h,f){
+  const inv=h.inv.map(i=>i.n).join(', ')||'nothing useful';
+  const whisper=(G.lastWhisper&&G.beats-G.lastWhisper.beat<=3)?
+    `Your god just told you: "${G.lastWhisper.txt}". Heed it if it suits you.`:'';
+  const cond=f.hp<f.hpMax*0.4?'badly hurt':f.hp<f.hpMax*0.75?'wounded':'still fresh';
+  const out=await callLLM(
+    `You ARE ${h.name}, a ${h.cls} (${h.trait}, ${h.trait2}), fighting for your life. Declare ONE combat action as a terse imperative command, like ">swing my sword at its knees" or ">throw sand in its eyes then stab". Be inventive and in-character; use your gear or an item if it's clever. Output ONLY JSON: {"action":"your >command, short","line":"one deadpan first-person diary sentence as you do it"}.`,
+    `You are at ${Math.round(h.hp)}/${h.hpMax} HP against a ${f.m}, which is ${cond}. Your weapon: ${gearName('weapon')}. Your shield: ${gearName('shield')}. Your satchel: ${inv}. ${whisper}`,160);
+  const j=JSON.parse(out.replace(/```json|```/g,'').trim());
+  return {action:(j.action||'attack').slice(0,90),line:(j.line||'').slice(0,240)};
+}
+/* THE DUNGEON MASTER — the SAME model, the world's hat. Rules on how the
+   hero's action lands AND runs the monster's move. Frames odds; dice decide. */
+async function dmLLM(h,f,action){
+  const inv=h.inv.map(i=>i.n).join(', ')||'none';
+  const cond=f.hp<f.hpMax*0.4?'badly hurt':f.hp<f.hpMax*0.75?'wounded':'fresh';
+  const out=await callLLM(
+    `You are the DUNGEON MASTER of a deadpan fantasy game. Two jobs each round: (1) rule on HOW the hero's declared action works, and (2) decide what the monster does back. You frame the odds only — the dice and character sheet decide the actual numbers, so never state outcomes or damage. Output ONLY JSON: {"stat":"mig|fin|wit|grd","approach":"melee|thrown|arcane|defend|item|trick","power":0.4-1.8,"item":"exact satchel item the hero uses, or empty","special":"none|heal|defend|flee|stun|buff","foe_move":"<=6 words: what the monster does","foe_intensity":0.4-1.6,"note":"<=8 word ruling"}. mig=brute melee, fin=precise/thrown, wit=clever tricks (ignores weapon quality), grd=defensive. power/intensity = how well-suited and dangerous the moves are given gear, wits and the foe — silly or desperate scores low, apt scores high.`,
+    `Hero sheet — might ${h.attr.mig}, finesse ${h.attr.fin}, wits ${h.attr.wit}, grit ${h.attr.grd}; weapon tier ${h.gear.weapon}, shield tier ${h.gear.shield}; satchel: ${inv}. Foe: ${f.m}${f.boss?' (a BOSS)':''}, currently ${cond}. The hero declares: "${action}"`,180);
+  const j=JSON.parse(out.replace(/```json|```/g,'').trim());
+  return {stat:['mig','fin','wit','grd'].includes(j.stat)?j.stat:'mig',
+    approach:j.approach||'melee',
+    power:clamp(parseFloat(j.power)||1,0.4,1.8),
+    item:j.item||null,itemFx:null,
+    special:['none','heal','defend','flee','stun','buff'].includes(j.special)?j.special:'none',
+    foeMove:(j.foe_move||'presses the attack').slice(0,40),
+    foeIntensity:clamp(parseFloat(j.foe_intensity)||1,0.4,1.6),
+    note:(j.note||'').slice(0,44)};
+}
+/* THE DUNGEON MASTER hands out the spoils — including real weapons */
+async function dmLootLLM(h,f){
+  const out=await callLLM(
+    `You are the DUNGEON MASTER doling out spoils after the hero fells a foe. Choose ONE reward fitting the foe and the hero's level. Output ONLY JSON: {"kind":"junk|use|curse|gear","name":"short deadpan item name","fx":"heal|hurry|gold|damage|luck|none","slot":"weapon|armor|helmet|shield|boots|none"}. kind=gear is a physical upgrade (set slot; bosses deserve these). kind=use is a consumable (set fx). Bosses give better spoils; trash gives junk.`,
+    `Hero: level ${h.level}, wields ${gearName('weapon')}. Foe defeated: ${f.m}${f.boss?' (a BOSS)':''}.`,120);
+  return JSON.parse(out.replace(/```json|```/g,'').trim());
+}
+/* victory spoils: the DM dispenses in improv fights, else the old table */
+async function grantSpoils(h,f){
+  if(f.improv&&SETTINGS.useLLM){
+    try{const j=await dmLootLLM(h,f);
+      if(j.kind==='gear'&&['weapon','armor','helmet','shield','boots'].includes(j.slot)){
+        h.gear[j.slot]=Math.min(h.gear[j.slot]+1,8);
+        fact('dm_gear',{name:j.name||'an upgrade',slot:j.slot});await flushDiary(true);return;}
+      const kind=['junk','use','curse'].includes(j.kind)?j.kind:'junk';
+      const fx=['heal','hurry','gold','damage','luck'].includes(j.fx)?j.fx:null;
+      addItem(kind,j.name||draw('loot',LOOT_JUNK),fx);
+      fact('dm_loot',{name:j.name||'something',kind});await flushDiary(chance(0.5));return;
+    }catch(e){}
+  }
+  const roll=R();
+  if(roll<0.08){addItem('curse',pick(LOOT_CURSE));fact('fight_curse',{m:f.m});await flushDiary(false);}
+  else if(roll<0.2){const u=pick(LOOT_USE);addItem('use',u.n,u.fx);fact('fight_win',{m:f.m,loot:u.n});await flushDiary(false);}
+  else if(roll<0.75){const l=draw('loot',LOOT_JUNK);addItem('junk',l);fact('fight_win',{m:f.m,loot:l});await flushDiary(chance(0.3));}
+  else{fact('fight_win',{m:f.m,loot:null});await flushDiary(chance(0.3));}
+}
+/* one exchange: actor -> judge -> script, then outcomes */
+async function fightRound(){
+  const h=G.hero,f=G.fight;f.rounds++;
+  let action,line,verdict;
+  if(f.improv){
+    try{setMetab('the hero sizes up the '+f.m+'…');
+      const a=await actorLLM(h,f);action=a.action;line=a.line;
+      setMetab('the dungeon master rules…');
+      verdict=await dmLLM(h,f,action);}
+    catch(e){const d=deterministicTurn(h,f);action=d.action;line=d.line;verdict=d.verdict;}
+    setMetab();
+  }else{const d=deterministicTurn(h,f);action=d.action;line=d.line;verdict=d.verdict;}
+  f.foeMove=verdict.foeMove||f.foeMove||'';
+  const res=resolveRound(h,f,verdict);
+  /* diorama feedback */
+  if(res.dmgDealt>0){fx.hit=8;fx.nums.push({x:0.62,y:0,t:32,txt:(res.crit?'CRIT ':'')+'-'+res.dmgDealt,c:res.crit?'#f0b840':'#efdfb8'});}
+  if(res.heal>0){fx.holy=20;fx.nums.push({x:0.32,y:0,t:32,txt:'+'+res.heal,c:'#8fc46a'});}
+  if(res.dmgTaken>0){fx.hurt=8;fx.shakeT=6;fx.nums.push({x:0.32,y:0,t:32,txt:'-'+res.dmgTaken,c:'#e05540'});}
+  if(res.dodged)fx.nums.push({x:0.30,y:0,t:28,txt:'dodge',c:'#8fd0ff'});
+  if(res.blocked)fx.nums.push({x:0.28,y:0,t:28,txt:'block',c:'#9aa0b0'});
+  /* the improvised round is its own diary beat — watch the hero think */
+  if(f.improv&&line)writeEntry('banter',line);
+  if(res.petSaved){fact('pet_save',{pet:G.pet.sp});await flushDiary(false);}
+  /* successful flight makes a grudge */
+  if(res.fled){G.grudge={m:f.m,lvl:h.level};remember('the '+f.m+' I ran from');
+    fact('fight_flee',{m:f.m});await flushDiary(false);G.fight=null;G.state='travel';return;}
+  /* hero death */
+  if(h.hp<=0){
+    h.hp=0;h.alive=false;h.deaths++;h.mood=clamp(h.mood-15,0,100);
+    if(G.pet&&G.pet.alive&&chance(0.15)){
+      G.pet.alive=false;G.fallen.push({name:G.pet.name,sp:G.pet.sp,d:G.day});
+      h.trophies.push('collar of '+G.pet.name);remember(G.pet.name+' the '+G.pet.sp);
+      fact('pet_death',{petName:G.pet.name});await flushDiary(true);G.pet=null;}
+    fact('death',{m:f.m});await flushDiary(true);bumpAtt(-5);
+    G.fight=null;G.state='travel';return;}
+  /* monster defeated */
+  if(f.hp<=0){
+    h.xp+=f.boss?rnd(10,16):f.grudge?rnd(6,10):rnd(4,8);
+    if(f.boss){const trophy=pick(['antlers of ','apology letter from ','commemorative mug of '])+f.m;
+      h.trophies.push(trophy);G.bossAtLevel=h.level+5;remember('felling '+f.m);
+      if(G.pet&&G.pet.alive)G.pet.lvl++;
+      fact('boss_win',{m:f.m,trophy});await flushDiary(true);
+      await grantSpoils(h,f);}
+    else if(f.grudge){G.grudge=null;fact('grudge_win',{m:f.m});await flushDiary(true);}
+    else await grantSpoils(h,f);
+    h.mood=clamp(h.mood+4,0,100);G.fight=null;G.state='travel';await checkLevel();return;}
+  /* wounded monster may break off and nurse a grudge */
+  if(!f.boss&&!f.grudge&&f.hp<f.hpMax*0.3&&chance(0.1)){
+    G.grudge={m:f.m,lvl:h.level};remember('the '+f.m+' that got away');
+    fact('fight_flee',{m:f.m});await flushDiary(false);G.fight=null;G.state='travel';return;}
+  /* opportunist monster robs and bails */
+  if(!f.boss&&chance(0.04)&&h.gold>5){const g2=rnd(3,10);h.gold=Math.max(0,h.gold-g2);
+    fact('fight_steal',{m:f.m,gold:g2});await flushDiary(false);G.fight=null;G.state='travel';return;}
+  /* else the duel continues next beat */
+}
+
+/* ---------- THE BEAT (state machine; substrate decides everything) ---------- */
+async function beat(){
+  if(!G||G.paused)return;
+  gpTick();
+  const h=G.hero;
+  G.beats++;
+  if(G.beats%40===0){G.day++;await newDayTick();}
+  /* death handling */
+  if(!h.alive){
+    if(G.gp>=40){
+      G.gp-=40;h.alive=true;h.hp=Math.ceil(h.hpMax*0.5);
+      G.god.resur++;G.god.lastActDay=G.day;G.state='town';G.fight=null;
+      fact('resurrect',{});await flushDiary(true);}
+    return;}
+  /* pending god effects */
+  if(G.pendingBless>0){const heal=G.pendingBless;G.pendingBless=0;
+    h.hp=Math.min(h.hpMax,h.hp+heal);h.mood=clamp(h.mood+10,0,100);fx.holy=30;
+    fact('bless',{heal});await flushDiary(true);}
+  if(G.pendingSmite>0){const dmg=G.pendingSmite;G.pendingSmite=0;
+    h.hp-=dmg;h.mood=clamp(h.mood-12,0,100);fx.bolt=20;fx.shakeT=10;
+    if(h.hp<=0){h.hp=0;h.alive=false;h.deaths++;bumpAtt(-20);
+      remember('the day my god struck me down personally');
+      fact('death_smite',{});await flushDiary(true);return;}
+    fact('smite',{dmg});await flushDiary(true);}
+  switch(G.state){
+    case 'town':{
+      const junk=h.inv.filter(i=>i.k==='junk');
+      h.inv=h.inv.filter(i=>i.k!=='junk');
+      const gold=junk.length*rnd(2,5);
+      h.gold+=gold;
+      fact('town',{gold});
+      if(h.gold>=30+h.level*10&&chance(0.7)){
+        const low=Object.keys(h.gear).filter(s=>h.gear[s]<8);
+        if(low.length){const slot=pick(low);h.gear[slot]++;h.gold-=30+h.level*10;
+          fact('gear',{slot,name:gearName(slot)});}}
+      /* bricks: devotion (and a heavy purse) decide where the gold goes */
+      let brickP=G.god.att>20?0.6:G.god.att>-20?0.4:0.15;
+      if(h.gold>300)brickP=Math.min(0.9,brickP+0.3);
+      if(h.gold>=50&&chance(brickP)){
+        const n=h.gold>400?rnd(2,4):1;
+        for(let i=0;i<n&&h.gold>=50;i++){h.gold-=50;h.bricks++;}
+        fact('brick',{});await flushDiary(true);
+        if(h.bricks>=CONFIG.brickGoal){writeEntry('mile',
+          `THE TEMPLE IS COMPLETE. ${CONFIG.brickGoal} golden bricks. My god has a house; I have a legacy; the pigeons have a new roof. What now? Everything.`);
+          remember('the day the temple was finished');h.bricks=0;}}
+      else await flushDiary(false);
+      /* tavern night: gluttony, low mood, or resentment */
+      if((h.trait==='gluttonous'||h.mood<40||G.god.att<-20)&&h.gold>=10&&chance(0.5)){
+        G.state='tavern';break;}
+      h.hp=Math.min(h.hpMax,h.hp+Math.ceil(h.hpMax*0.3));
+      if(!G.quest)newQuest();
+      G.state='travel';G.biome=pick(BIOMES);
+      break;}
+    case 'tavern':{
+      const h2=G.hero;
+      if(chance(0.4)&&h2.gold>=5){
+        const won=chance(0.4);const amt=rnd(5,15);
+        if(won)h2.gold+=amt;else h2.gold=Math.max(0,h2.gold-amt);
+        fact('tavern',{won,gold:amt});}
+      else{const amt=Math.min(h2.gold,rnd(4,10));h2.gold-=amt;
+        fact('tavern',{gold:amt});}
+      h2.mood=clamp(h2.mood+15,0,100);h2.hangover=1;
+      await flushDiary(chance(0.4));
+      h2.hp=Math.min(h2.hpMax,h2.hp+Math.ceil(h2.hpMax*0.3));
+      if(!G.quest)newQuest();
+      G.state='travel';G.biome=pick(BIOMES);
+      break;}
+    case 'travel':{
+      const hour=new Date().getHours();
+      if(G.mode==='live'&&(hour>=23||hour<6)&&chance(0.6)){
+        G.state='rest';fact('rest',{});await flushDiary(false);break;}
+      if(h.hangover>0){h.hangover=0;fact('hangover',{});await flushDiary(false);break;}
+      G.quest.progress++;
+      /* cursed items act up */
+      const cursed=h.inv.find(i=>i.k==='curse');
+      if(cursed&&chance(0.1)){
+        cursed.mishaps++;h.mood=clamp(h.mood-5,0,100);
+        if(cursed.mishaps>=3){h.inv=h.inv.filter(i=>i!==cursed);
+          remember('the '+cursed.n);
+          fact('curse_discard',{item:cursed.n});}
+        else fact('curse_mishap',{item:cursed.n});
+        await flushDiary(false);break;}
+      /* hurt hero self-medicates */
+      if(h.hp<h.hpMax*0.4){
+        const potion=h.inv.find(i=>i.k==='use'&&i.fx==='heal');
+        if(potion){h.inv=h.inv.filter(i=>i!==potion);
+          h.hp=Math.min(h.hpMax,h.hp+rnd(10,16));
+          fact('use_item',{item:potion.n,fx:'heal'});await flushDiary(false);break;}}
+      /* companions arrive */
+      if(chance(0.1)&&h.level>=3&&!G.pet){
+        const sp=pick(PETS),petName=pick(PET_NAMES);
+        G.pet={sp,name:petName,lvl:1,alive:true,ko:0};
+        fact('pet',{pet:sp,petName});await flushDiary(true);break;}
+      if(chance(0.04)&&!G.human){
+        G.human=pick(HUMANS);G.humanQuest=G.questCount;
+        fact('human_join',{h:G.human});await flushDiary(true);break;}
+      /* pet mourning callback */
+      if(G.fallen.length&&chance(0.02)){
+        fact('pet_mourn',{petName:G.fallen[G.fallen.length-1].name});
+        await flushDiary(false);break;}
+      /* memory callback */
+      if(G.memories.length&&chance(0.04)){
+        fact('callback',{t:pick(G.memories).t});await flushDiary(false);break;}
+      /* banter */
+      if(G.pet&&G.pet.alive&&chance(0.06)){
+        fact('banter',{txt:pick([`${G.pet.name} caught something in the grass and ate it with eye contact. Establishing dominance, or affection. Unclear.`,
+          `${G.pet.name} growled at the ${G.biome} in general. Agreed.`,
+          `${G.pet.name} found the road first today. I follow a ${G.pet.sp} now. The ballads will need editing.`])});
+        await flushDiary(false);break;}
+      if(G.human&&chance(0.06)){
+        fact('banter',{txt:pick([`${G.human} hummed the same four notes for an hour. I know them better than my own name now.`,
+          `${G.human} claims to know a shortcut. The last shortcut is why my boots squelch.`,
+          `${G.human} told a story about a hero who did everything right. We observed a silence for that hero.`])});
+        await flushDiary(false);break;}
+      /* road events */
+      if(chance(0.05)&&h.gold>=15){
+        const it=pick(LOOT_USE);const cost=rnd(8,18);
+        if(chance(0.75)){h.gold-=cost;addItem('use',it.n,it.fx);
+          fact('merchant',{bought:true,item:it.n,cost});}
+        else fact('merchant',{bought:false});
+        await flushDiary(false);break;}
+      if(chance(0.04)){fact('shrine',{});await flushDiary(false);break;}
+      if(chance(0.08)){
+        const win=chance(0.5+(h.level-G.rival.level)*0.05);
+        if(win)G.rival.heroScore++;else G.rival.score++;
+        G.rival.level=Math.max(1,h.level+rnd(-1,1));
+        fact('duel',{win});await flushDiary(true);break;}
+      if(chance(0.03)){fact('taunt',{});await flushDiary(false);break;}
+      /* quest completion */
+      if(G.quest.progress>=G.quest.need){
+        h.gold+=G.quest.reward;h.xp+=G.quest.epic?rnd(12,18):rnd(8,14);
+        if(G.quest.epic){
+          G.epic.step++;
+          if(G.epic.step>=G.epic.steps.length){
+            h.trophies.push('memento of '+G.epic.title);
+            remember(G.epic.title);
+            fact('epic_done',{title:G.epic.title});G.epic=null;}
+          else fact('epic_step',{q:G.quest.text,title:G.epic.title});}
+        else fact('quest_done',{q:G.quest.text,gold:G.quest.reward});
+        G.quest=null;await flushDiary(true);
+        await checkLevel();
+        if(G.human&&G.questCount>G.humanQuest){
+          const stole=chance(0.4);
+          if(stole)h.gold=Math.max(0,h.gold-rnd(5,15));
+          remember(G.human+(stole?' (the purse thing)':''));
+          fact('human_leave',{h:G.human});G.human=null;await flushDiary(true);}
+        G.state=chance(0.6)?'town':'travel';
+        if(G.state==='town')G.town=pick(TOWNS);
+        if(!G.quest&&G.state==='travel')newQuest();
+        break;}
+      /* the grudge returns */
+      if(G.grudge&&chance(0.08)){
+        const m=G.grudge.m;
+        G.fight=makeFight(m,{grudge:true});
+        fact('grudge_return',{m});await flushDiary(true);
+        G.state='fight';break;}
+      /* a fight */
+      if(chance(0.45)){
+        const boss=h.level>=G.bossAtLevel;
+        const m=boss?pick(BOSSES):draw('monsters',MONSTERS);
+        G.fight=makeFight(m,{boss});
+        fact(boss?'boss_start':'fight_start',{m});await flushDiary(boss);
+        G.state='fight';break;}
+      fact('travel',{});await flushDiary(false);
+      break;}
+    case 'fight':{await fightRound();break;}
+    case 'rest':{
+      h.hp=Math.min(h.hpMax,h.hp+3);
+      const hour=new Date().getHours();
+      if(G.mode!=='live'||(hour>=6&&hour<23))G.state='travel';
+      break;}
+  }
+  refreshUI();
+  if(G.beats%6===0)save();
+}
+async function newDayTick(){
+  const h=G.hero;
+  /* weather */
+  G.weather=G.biome==='desert'?(chance(0.05)?'rain':'clear'):
+    G.biome==='swamp'?(chance(0.3)?'fog':chance(0.25)?'rain':'clear'):
+    G.biome==='hills'?(chance(0.12)?'snow':chance(0.2)?'rain':'clear'):
+    (chance(0.25)?'rain':'clear');
+  if(G.pet&&G.pet.alive&&G.pet.ko&&G.day>=G.pet.ko)G.pet.ko=0;
+  /* divine silence is noticed */
+  const silence=G.day-G.god.lastActDay;
+  if(silence>0)G.god.att+=G.god.att>0?-1:G.god.att<0?1:0;
+  if(silence>2&&silence%3===0){
+    fact('silence',{n:silence});await flushDiary(false);
+    regenBelief();}
+  h.mood=clamp(h.mood+(h.mood<50?2:-1),0,100);
+}
+async function checkLevel(){const h=G.hero;
+  while(h.xp>=h.xpNeed){h.xp-=h.xpNeed;h.level++;h.xpNeed=Math.floor(h.xpNeed*1.35);
+    const bias=classBias(h.cls);
+    const grew=[pick(['mig','fin','wit','grd',bias,bias])];h.attr[grew[0]]++;
+    if(chance(0.35)){const k=pick(['mig','fin','wit','grd']);h.attr[k]++;grew.push(k);}
+    recomputeHp(true);
+    fact('levelup',{grew});await flushDiary(true);}}
+
+/* ---------- GOD VERBS ---------- */
+function recordAct(kind){G.god.lastActDay=G.day;
+  if(kind==='bless'){G.god.bless++;bumpAtt(6);}
+  if(kind==='smite'){G.god.smite++;bumpAtt(-9);}
+  if(kind==='voice'){G.god.voices++;bumpAtt(2);}
+  if((G.god.bless+G.god.smite+G.god.voices)%3===0)regenBelief();
+}
+function gpTick(){if(!G)return;
+  const now=Date.now();
+  const regen=Math.floor((now-G.lastGpMs)/(G.mode==='rush'?CONFIG.gpRegenMs/20:CONFIG.gpRegenMs));
+  if(regen>0){G.gp=Math.min(100,G.gp+regen);G.lastGpMs=now;refreshGp();}}
+document.getElementById('b-bless').onclick=()=>{
+  if(!G||G.gp<25)return;G.gp-=25;refreshGp();
+  recordAct('bless');
+  if(G.fight){G.fight.hp=Math.max(1,G.fight.hp-rnd(5,9));fx.holy=30;
+    writeEntry('holy',`Light pours onto my blade mid-swing. The ${G.fight.m} noticed too. Thank you. THANK you.`);
+    return;}
+  G.pendingBless=rnd(8,15)+G.hero.level*2;};
+document.getElementById('b-smite').onclick=()=>{
+  if(!G||G.gp<25)return;G.gp-=25;refreshGp();
+  recordAct('smite');
+  G.pendingSmite=rnd(5,10);};
+document.getElementById('b-voice').onclick=async()=>{
+  const inp=document.getElementById('voice');
+  const txt=inp.value.trim();if(!txt||!G||G.gp<20)return;
+  G.gp-=20;refreshGp();inp.value='';
+  recordAct('voice');
+  G.lastWhisper={txt,beat:G.beats};
+  writeEntry('holy',`(A voice from above: "${txt}")`);
+  if(!SETTINGS.useLLM){
+    const heard=chance(0.6);
+    writeEntry('plain',heard?`The voice of my god! I shall obey. Probably. In a minute.`:`Thought I heard something. Wind, presumably. Divine wind? No. Wind.`);
+    if(heard)G.pendingBless=5;return;}
+  try{
+    const out=await callLLM(
+      `You interpret a god's whisper to their hero in a fantasy-parody zero-player game. Output ONLY JSON: {"action":"heal|smite|bless_fight|hurry_quest|drop_loot|give_item|encourage|scold|nothing","reply":"hero's one-sentence diary reaction, deadpan first person"}. Choose the action the whisper most implies; "nothing" if unclear.`,
+      `Hero: ${G.hero.name}, ${G.hero.trait}, currently ${attBand()}. State: ${G.state}${G.fight?' fighting '+G.fight.m:''}${G.quest?', quest: '+G.quest.text+' ('+G.quest.progress+'/'+G.quest.need+')':''}. The god whispers: "${txt}"`,200);
+    const j=JSON.parse(out.replace(/```json|```/g,'').trim());
+    const a=j.action||'nothing';
+    if(a==='heal')G.pendingBless=rnd(8,14);
+    if(a==='smite')G.pendingSmite=rnd(4,8);
+    if(a==='bless_fight'&&G.fight){G.fight.hp=Math.max(1,G.fight.hp-rnd(5,9));fx.holy=20;}
+    if(a==='hurry_quest'&&G.quest)G.quest.progress=Math.min(G.quest.need,G.quest.progress+2);
+    if(a==='drop_loot'){const item=draw('loot',LOOT_JUNK);addItem('junk',item);
+      writeEntry('plain',`A ${item} fell from the sky. Directly onto my head. A gift, then.`);}
+    if(a==='give_item'){const u=pick(LOOT_USE);addItem('use',u.n,u.fx);
+      writeEntry('plain',`A ${u.n} materialized in my pack, still warm. The heavens have pockets.`);}
+    if(a==='encourage'){G.hero.mood=clamp(G.hero.mood+15,0,100);bumpAtt(4);}
+    if(a==='scold'){G.hero.mood=clamp(G.hero.mood-10,0,100);bumpAtt(-4);
+      if(G.quest)G.quest.progress=Math.min(G.quest.need,G.quest.progress+1);}
+    if(j.reply)writeEntry('plain',j.reply);
+  }catch(e){
+    writeEntry('plain',`The heavens crackled meaningfully. I choose to interpret this as approval.`);
+    G.pendingBless=4;}
+};
+document.getElementById('voice').addEventListener('keydown',e=>{
+  if(e.key==='Enter')document.getElementById('b-voice').click();});
+function refreshGp(){document.getElementById('gp-i').style.width=(G?G.gp:0)+'%';
+  document.getElementById('gp-num').textContent=(G?G.gp:0)+'%';
+  document.getElementById('b-bless').disabled=!G||G.gp<25;
+  document.getElementById('b-smite').disabled=!G||G.gp<25;
+  document.getElementById('b-voice').disabled=!G||G.gp<20;}
+
+/* ---------- SCENE (side-view living diorama, deluxe) ---------- */
+const cv=document.getElementById('cv');const ctx=cv.getContext('2d');
+let tick=0;const fx={hit:0,hurt:0,bolt:0,holy:0,shakeT:0,nums:[]};
+let parts=[];
+function resize(){const w=document.getElementById('scenewrap');
+  cv.width=Math.floor(w.clientWidth/3);cv.height=Math.floor(w.clientHeight/3);}
+window.addEventListener('resize',resize);
+const BIOPAL={meadow:{ground:'#5da84e',ground2:'#4a8a3e',far:'#3a7050',far2:'#2a5a44',prop:'tree'},
+  forest:{ground:'#3f7a3a',ground2:'#2f5e2c',far:'#1e4a30',far2:'#173c28',prop:'pine'},
+  hills:{ground:'#7aa04a',ground2:'#5e8038',far:'#4a6a5a',far2:'#3a5648',prop:'rock'},
+  swamp:{ground:'#4a6a44',ground2:'#38523a',far:'#2a3e34',far2:'#20302a',prop:'reed'},
+  desert:{ground:'#d8b878',ground2:'#c0a060',far:'#a08a58',far2:'#887446',prop:'cactus'}};
+function skyColors(){
+  const h=new Date().getHours()+new Date().getMinutes()/60;
+  const f=G&&G.mode==='rush'?((tick/300)%1):(h/24);
+  let c;
+  if(f<0.21||f>0.95)c=['#0a0a2e','#1c1440',true];
+  else if(f<0.29)c=['#3c2a6a','#e07848',false];
+  else if(f<0.75)c=['#4a9ade','#a8d8f0',false];
+  else if(f<0.85)c=['#5a6ac0','#f0885a',false];
+  else c=['#141040','#302060',true];
+  if(G&&(G.weather==='rain'||G.weather==='fog')&&!c[2])c=['#6a7a9a','#9aa8bc',false];
+  if(G&&G.weather==='snow'&&!c[2])c=['#8a9ab8','#c8d4e4',false];
+  return c;
+}
+/* hero sprite: painted per-frame; gear shows */
+function drawHero(x,y,frame,flip){
+  const h=G.hero;const px=(a,b,w,hh,c)=>{ctx.fillStyle=c;ctx.fillRect(x+(flip?-a-w:a),y+b,w,hh);};
+  const l=frame%2;
+  /* cape at level 10+ */
+  if(h.level>=10){const fl2=Math.sin(tick/8)>0?1:0;
+    px(-2,9,2,8+fl2,'#5a2a6a');px(-3,10,1,6,'#4a2058');}
+  /* legs */
+  px(2,16,2,4,'#43301c');px(6+(l?1:0),16,2,4,'#43301c');
+  /* boots tier tint */
+  if(h.gear.boots>2){px(2,19,2,1,'#8a6a20');px(6+(l?1:0),19,2,1,'#8a6a20');}
+  /* body + tabard */
+  px(1,9,8,7,'#8a2020');px(2,10,6,5,h.gear.armor>4?'#c8c8d8':h.gear.armor>2?'#9a8a8a':'#b83030');
+  /* arms */
+  px(0,10,1,4,'#eec39a');px(9,10,1,4,'#eec39a');
+  /* shield on left arm */
+  if(h.gear.shield>0){const sc=h.gear.shield>4?'#f0b840':h.gear.shield>2?'#9aa0b0':'#8a5a32';
+    px(-1,10,2,5,sc);px(-1,11,2,1,'#000');}
+  /* sword drawn in a fight, swings */
+  if(G.state==='fight'){const swing=tick%14<7?0:3;
+    px(10,3+swing,1,8,'#c8c8d8');px(9,10,3,1,'#8a6a20');
+    if(fx.hit>4){px(11,5,3,1,'#fff');px(12,4,2,1,'#fff');}}
+  /* head */
+  px(2,1,6,7,'#eec39a');
+  /* helmet by tier */
+  if(h.gear.helmet>4)px(2,0,6,3,'#f0b840');
+  else if(h.gear.helmet>2)px(2,0,6,2,'#9aa0b0');
+  else px(2,0,6,2,'#5a4632');
+  px(3,3,1,1,'#221a10');px(6,3,1,1,'#221a10');
+  px(4,6,2,1,'#a5341f');
+}
+function drawPet(x,y){
+  const p=G.pet;if(!p||!p.alive)return;
+  const bob=Math.sin(tick/6)>0?0:1;
+  const hue=[...p.sp].reduce((a,c)=>a+c.charCodeAt(0),0)%360;
+  ctx.fillStyle=`hsl(${hue},40%,45%)`;
+  if(p.ko){ctx.fillRect(x,y+2,5,2);return;} /* riding in the pack, abstractly */
+  ctx.fillRect(x,y-3+bob,6,3);
+  ctx.fillRect(x+5,y-5+bob,3,3);
+  ctx.fillStyle='#000';ctx.fillRect(x+6,y-4+bob,1,1);
+  ctx.fillStyle=`hsl(${hue},40%,35%)`;
+  ctx.fillRect(x-1,y-4+(tick%10<5?0:-1),1,2);
+  ctx.fillRect(x+1,y,1,2);ctx.fillRect(x+4,y,1,2);
+}
+function drawHuman(x,y){
+  if(!G.human)return;
+  const l=Math.floor(tick/7)%2;
+  ctx.fillStyle='#43301c';ctx.fillRect(x+1,y+12,1,3);ctx.fillRect(x+3+(l?1:0),y+12,1,3);
+  ctx.fillStyle='#4a5a6a';ctx.fillRect(x,y+5,5,7);
+  ctx.fillStyle='#eec39a';ctx.fillRect(x+1,y,3,5);
+  ctx.fillStyle='#2a2018';ctx.fillRect(x+1,y,3,1);
+}
+/* procedural monster: symmetric seeded creature with features */
+const monCache={};
+function monsterSprite(name,boss){
+  const key=name+(boss?'!':'');
+  if(monCache[key])return monCache[key];
+  const r=mulberry32([...name].reduce((a,c)=>a+c.charCodeAt(0),7));
+  const w=boss?18:13,h=boss?18:13,c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d');
+  const hue=Math.floor(r()*360);
+  const body=`hsl(${hue},55%,45%)`,shade=`hsl(${hue},55%,30%)`,pop=`hsl(${(hue+140)%360},65%,55%)`;
+  /* blob body, symmetric */
+  for(let j=3;j<h-2;j++)for(let i=0;i<w/2;i++){
+    const cy2=Math.abs(j-h/2)/(h/2),cx2=Math.abs(i-w/4)/(w/4);
+    if(r()<0.75-cy2*0.3){x.fillStyle=r()<0.25?shade:body;
+      x.fillRect(i,j,1,1);x.fillRect(w-1-i,j,1,1);}}
+  /* legs */
+  const legs=1+Math.floor(r()*3);
+  x.fillStyle=shade;
+  for(let i=0;i<legs;i++){const lx=2+Math.floor(i*(w/2-3)/Math.max(1,legs-1||1));
+    x.fillRect(lx,h-2,1,2);x.fillRect(w-1-lx,h-2,1,2);}
+  /* horns or ears */
+  if(r()<0.5){x.fillStyle=pop;x.fillRect(2,1,1,3);x.fillRect(w-3,1,1,3);}
+  else{x.fillStyle=shade;x.fillRect(3,2,2,2);x.fillRect(w-5,2,2,2);}
+  /* eyes: 1-3 */
+  const eyes=1+Math.floor(r()*3);
+  const ey=4+Math.floor(r()*3);
+  x.fillStyle='#fff';
+  if(eyes===1)x.fillRect(Math.floor(w/2)-1,ey,3,2);
+  else if(eyes===2){x.fillRect(3,ey,2,2);x.fillRect(w-5,ey,2,2);}
+  else{x.fillRect(2,ey,2,2);x.fillRect(Math.floor(w/2)-1,ey-1,2,2);x.fillRect(w-4,ey,2,2);}
+  x.fillStyle='#000';
+  if(eyes===1)x.fillRect(Math.floor(w/2),ey+1,1,1);
+  else{x.fillRect(4,ey+1,1,1);x.fillRect(w-4,ey+1,1,1);}
+  /* boss crown */
+  if(boss){x.fillStyle='#f0b840';x.fillRect(Math.floor(w/2)-3,0,6,2);
+    x.fillRect(Math.floor(w/2)-3,-0,1,1);}
+  monCache[key]=c;return c;
+}
+function spawnWeather(W,H,gy){
+  if(!G)return;
+  if(G.weather==='rain'&&tick%2===0)parts.push({x:R()*W,y:0,vx:-0.4,vy:2.4,t:120,k:'rain'});
+  if(G.weather==='snow'&&tick%3===0)parts.push({x:R()*W,y:0,vx:(R()-0.5)*0.4,vy:0.5,t:300,k:'snow'});
+  if(G.weather==='clear'&&G.biome==='forest'&&tick%40===0)parts.push({x:R()*W,y:R()*gy*0.5,vx:(R()-0.5)*0.5,vy:0.3,t:200,k:'leaf'});
+  const night=skyColors()[2];
+  if(night&&(G.biome==='meadow'||G.biome==='swamp')&&tick%30===0)
+    parts.push({x:R()*W,y:gy-rnd(4,24),vx:(R()-0.5)*0.3,vy:(R()-0.5)*0.3,t:200,k:'fly'});
+  parts=parts.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.t--;
+    if(p.k==='fly'){p.vx+=(R()-0.5)*0.08;p.vy+=(R()-0.5)*0.08;}
+    return p.t>0&&p.y<gy+6;});
+  if(parts.length>400)parts.splice(0,parts.length-400);
+  for(const p of parts){
+    if(p.k==='rain'){ctx.fillStyle='rgba(160,190,230,0.6)';ctx.fillRect(p.x,p.y,1,3);}
+    else if(p.k==='snow'){ctx.fillStyle='rgba(240,244,255,0.9)';ctx.fillRect(p.x,p.y,1,1);}
+    else if(p.k==='leaf'){ctx.fillStyle=['#c9762a','#b8912a'][p.t%2];ctx.fillRect(p.x,p.y,2,1);}
+    else if(p.k==='fly'){ctx.fillStyle=`rgba(240,220,120,${0.3+0.7*Math.abs(Math.sin(p.t/9))})`;ctx.fillRect(p.x,p.y,1,1);}}
+}
+function drawScene(){
+  requestAnimationFrame(drawScene);
+  tick++;
+  const w=document.getElementById('scenewrap');
+  if(cv.width!==Math.floor(w.clientWidth/3)||cv.height!==Math.floor(w.clientHeight/3))resize();
+  const W=cv.width,H=cv.height;
+  if(!G||W<40||H<40)return;
+  let shx=0,shy=0;
+  if(fx.shakeT>0){fx.shakeT--;shx=rnd(-1,1);shy=rnd(-1,1);}
+  ctx.save();ctx.translate(shx,shy);
+  const [c1,c2,night]=skyColors();
+  const gr=ctx.createLinearGradient(0,0,0,H);gr.addColorStop(0,c1);gr.addColorStop(1,c2);
+  ctx.fillStyle=gr;ctx.fillRect(-2,-2,W+4,H+4);
+  if(night){const r4=mulberry32(9);ctx.fillStyle='rgba(240,240,255,0.8)';
+    for(let i=0;i<40;i++){if((Math.floor(tick/25)+i)%6)ctx.fillRect(r4()*W,r4()*H*0.55,1,1);}
+    ctx.fillStyle='#e8e8f8';ctx.beginPath();ctx.arc(W*0.8,H*0.2,6,0,7);ctx.fill();
+    ctx.fillStyle=c1;ctx.beginPath();ctx.arc(W*0.8+3,H*0.2-1,5,0,7);ctx.fill();}
+  else if(G.weather==='clear'){ctx.fillStyle='#ffe07a';ctx.beginPath();ctx.arc(W*0.78,H*0.18,7,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,224,122,0.2)';ctx.beginPath();ctx.arc(W*0.78,H*0.18,11,0,7);ctx.fill();}
+  const scroll=(G&&(G.state==='travel')&&G.hero.alive)?tick*0.6:tick*0.05;
+  const bio=BIOPAL[G?G.biome:'meadow'];
+  /* two parallax ridges */
+  ctx.fillStyle=night?'#101828':bio.far2;
+  ctx.beginPath();ctx.moveTo(0,H);
+  for(let sx=0;sx<=W;sx+=6){const wx=sx+scroll*0.15;
+    ctx.lineTo(sx,H*0.52-18*Math.sin(wx*0.012)-6*Math.sin(wx*0.03+1));}
+  ctx.lineTo(W,H);ctx.fill();
+  ctx.fillStyle=night?'#141c30':bio.far;
+  ctx.beginPath();ctx.moveTo(0,H);
+  for(let sx=0;sx<=W;sx+=6){const wx=sx+scroll*0.3;
+    ctx.lineTo(sx,H*0.62-14*Math.sin(wx*0.02)-8*Math.sin(wx*0.05+2));}
+  ctx.lineTo(W,H);ctx.fill();
+  /* ground */
+  const gy=Math.floor(H*0.78);
+  const snowy=G.weather==='snow';
+  ctx.fillStyle=snowy?'#dce4ee':bio.ground;ctx.fillRect(0,gy,W,4);
+  ctx.fillStyle=snowy?'#c2cede':bio.ground2;ctx.fillRect(0,gy+4,W,H-gy);
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  for(let i=0;i<24;i++){const px2=((i*53-scroll)%(W+20)+W+20)%(W+20)-10;
+    ctx.fillRect(px2,gy+8+(i*17)%Math.max(6,(H-gy-12)),3,2);}
+  /* props parallax */
+  for(let i=0;i<7;i++){const px2=((i*97-scroll*0.8)%(W+60)+W+60)%(W+60)-30;
+    const p=bio.prop;
+    if(p==='tree'){ctx.fillStyle=snowy?'#9ab0a0':'#4d9c3f';ctx.fillRect(px2,gy-16,10,10);
+      ctx.fillStyle=snowy?'#c8d8cc':'#6ec654';ctx.fillRect(px2+2,gy-19,6,5);
+      ctx.fillStyle='#8a5a32';ctx.fillRect(px2+4,gy-6,2,6);}
+    if(p==='pine'){ctx.fillStyle=snowy?'#7a9a84':'#2f6a2c';
+      ctx.beginPath();ctx.moveTo(px2,gy);ctx.lineTo(px2+6,gy-20);ctx.lineTo(px2+12,gy);ctx.fill();}
+    if(p==='rock'){ctx.fillStyle='#6f7890';ctx.fillRect(px2,gy-6,9,6);
+      ctx.fillStyle='#8a94a8';ctx.fillRect(px2+2,gy-8,5,2);}
+    if(p==='reed'){ctx.fillStyle='#5a7a3a';ctx.fillRect(px2,gy-10,1,10);
+      ctx.fillRect(px2+3,gy-13,1,13);ctx.fillStyle='#7a5a30';ctx.fillRect(px2+3,gy-14,2,3);}
+    if(p==='cactus'){ctx.fillStyle='#3f8a4a';ctx.fillRect(px2,gy-14,4,14);
+      ctx.fillRect(px2-3,gy-10,3,2);ctx.fillRect(px2-3,gy-12,2,4);}
+  }
+  const heroX=Math.floor(W*0.32),heroY=gy-20;
+  /* TOWN / TAVERN scene */
+  if(G&&(G.state==='town'||G.state==='tavern')){
+    const bx=Math.floor(W*0.52);
+    for(let b=0;b<3;b++){const x0=bx+b*34;
+      ctx.fillStyle=['#c9891c','#6f7890','#8a5a32'][b];ctx.fillRect(x0,gy-30,28,8);
+      ctx.fillStyle='#efdfb8';ctx.fillRect(x0+1,gy-22,26,22);
+      ctx.fillStyle='#623c1e';ctx.fillRect(x0+10,gy-12,7,12);
+      ctx.fillStyle=night?'#ffd98a':'#5a7fd0';ctx.fillRect(x0+4,gy-18,5,4);ctx.fillRect(x0+19,gy-18,5,4);}
+    /* tavern sign on first building */
+    ctx.fillStyle='#f0b840';ctx.fillRect(bx-4,gy-24,4,4);
+    ctx.fillStyle='#5a3a1a';ctx.fillRect(bx-3,gy-26,1,2);
+    /* market stall */
+    const mx0=Math.floor(W*0.46);
+    ctx.fillStyle='#a05a3a';ctx.fillRect(mx0,gy-8,12,2);
+    ctx.fillStyle='#c9762a';ctx.fillRect(mx0,gy-14,12,3);
+    ctx.fillStyle='#8a5a32';ctx.fillRect(mx0+1,gy-6,1,6);ctx.fillRect(mx0+10,gy-6,1,6);
+    /* temple site */
+    const tx=Math.floor(W*0.08);
+    const prog=G.hero.bricks/CONFIG.brickGoal;
+    const th=Math.floor(6+prog*26);
+    ctx.fillStyle='#d9c28a';ctx.fillRect(tx,gy-th,26,th);
+    ctx.fillStyle='#b98a1e';
+    for(let j=0;j<th;j+=4)for(let i=(j%8?0:3);i<26;i+=7)ctx.fillRect(tx+i,gy-th+j,5,2);
+    if(prog>0.9){ctx.fillStyle='#f0b840';ctx.beginPath();
+      ctx.moveTo(tx-2,gy-th);ctx.lineTo(tx+13,gy-th-10);ctx.lineTo(tx+28,gy-th);ctx.fill();}
+    ctx.fillStyle='#8a6a3a';ctx.fillRect(tx+28,gy-14,1,14);ctx.fillRect(tx+28,gy-14,8,1);
+    ctx.font='7px monospace';ctx.fillStyle='#efdfb8';
+    ctx.fillText(G.hero.bricks+'/'+CONFIG.brickGoal,tx+2,gy-th-3);
+  }
+  /* campfire at rest */
+  if(G&&G.state==='rest'){
+    ctx.fillStyle='#8a5a32';ctx.fillRect(heroX+16,gy-3,8,2);
+    const fl=tick%12<6;
+    ctx.fillStyle='#ff9030';ctx.fillRect(heroX+18,gy-7-(fl?1:0),4,4+(fl?1:0));
+    ctx.fillStyle='#ffd98a';ctx.fillRect(heroX+19,gy-5,2,2);
+    ctx.fillStyle='rgba(200,200,210,0.3)';
+    ctx.fillRect(heroX+19+Math.sin(tick/15)*2,gy-14-((tick/3)%6),2,2);}
+  /* monster */
+  if(G&&G.fight){
+    const boss=G.fight.boss;
+    const m=monsterSprite(G.fight.m,boss);
+    const lunge=tick%20<4?-2:0;
+    const mx=Math.floor(W*0.58)+(fx.hit>0?2:0)+lunge;
+    const msz=boss?34:24;
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(m,mx,gy-msz-2,msz,msz);
+    ctx.fillStyle='#120d20';ctx.fillRect(mx-6,gy-msz-10,36,4);
+    ctx.fillStyle='#e05540';ctx.fillRect(mx-5,gy-msz-9,Math.max(0,34*(G.fight.hp/G.fight.hpMax)),2);
+    ctx.font='7px monospace';ctx.fillStyle=boss?'#f0b840':'#efdfb8';
+    const tag=G.fight.grudge?' (it remembers)':'';
+    const nm=(G.fight.m+tag).length>26?(G.fight.m+tag).slice(0,26)+'…':G.fight.m+tag;
+    ctx.fillText(nm,Math.max(2,mx-6),gy-msz-13);
+  }
+  /* hero + companions */
+  if(G&&(G.hero.alive||tick%16<8)){
+    const walking=G&&G.state==='travel';
+    drawHero(heroX,heroY+(G.state==='rest'?4:0),walking?Math.floor(tick/7):0,false);
+    if(!G.hero.alive){ctx.font='8px monospace';ctx.fillStyle='#cfc4e8';
+      ctx.fillText('✝',heroX+3,heroY-3);
+      /* the ghost considers its options */
+      const gy2=heroY-8-((tick/4)%20);
+      ctx.fillStyle='rgba(207,232,255,0.5)';ctx.fillRect(heroX+2,gy2,5,6);}
+  }
+  if(G&&G.pet&&G.pet.alive)drawPet(heroX-12,gy-2);
+  if(G&&G.human)drawHuman(heroX-20,heroY+5);
+  /* fx */
+  if(fx.bolt>0){fx.bolt--;
+    ctx.strokeStyle='#8fd0ff';ctx.lineWidth=2;ctx.beginPath();
+    let bx2=heroX+5,by2=0;ctx.moveTo(bx2,by2);
+    while(by2<heroY){bx2+=rnd(-4,4);by2+=8;ctx.lineTo(bx2,by2);}
+    ctx.stroke();
+    if(fx.bolt>15){ctx.fillStyle='rgba(200,230,255,0.25)';ctx.fillRect(0,0,W,H);}}
+  if(fx.holy>0){fx.holy--;
+    ctx.fillStyle=`rgba(240,184,64,${fx.holy/60})`;
+    for(let i=0;i<5;i++){ctx.fillRect(heroX-6+i*5,heroY-14-((tick+i*7)%18),1,6);}}
+  if(fx.hit>0)fx.hit--;
+  if(fx.hurt>0){fx.hurt--;ctx.fillStyle='rgba(208,68,48,0.12)';ctx.fillRect(0,0,W,H);}
+  /* floating damage numbers */
+  fx.nums=fx.nums.filter(n=>n.t-->0);
+  ctx.font='8px monospace';
+  for(const n of fx.nums){
+    ctx.fillStyle=n.c;
+    ctx.fillText(n.txt,Math.floor(W*n.x),gy-30-(30-n.t));}
+  /* weather */
+  spawnWeather(W,H,gy);
+  ctx.restore();
+  /* caption */
+  const cap=document.getElementById('caption');
+  const wx=G.weather!=='clear'?` · ${G.weather}`:'';
+  if(G)cap.textContent=
+    !G.hero.alive?`${G.hero.name} is dead. The heavens are gathering the deposit for a resurrection…`:
+    G.state==='town'?`${G.town} — selling loot, buying regret${wx}`:
+    G.state==='tavern'?`${G.tavern}, ${G.town} — one more, for the road${wx}`:
+    G.state==='fight'?`battling ${G.fight.boss?'':'the '}${G.fight.m}${G.fight.foeMove?' — it '+G.fight.foeMove:''}`:
+    G.state==='rest'?`camp, somewhere in the ${G.biome}${wx}`:
+    G.quest?`the ${G.biome}${wx} — quest: ${G.quest.text}`:`the ${G.biome}${wx}`;
+}
+
+/* ---------- UI ---------- */
+function setMetab(msg){const m=document.getElementById('metab');
+  if(msg){m.textContent=msg;return;}
+  m.textContent=G&&G.lastGenMs?`${G.genCount} entries ghostwritten · last ${(G.lastGenMs/1000).toFixed(1)}s (${G.voiceVia||'—'}) — time moves at the speed of writing`:'';}
+function bar(id,frac,txt,num){
+  document.getElementById('bar-'+id).style.width=Math.max(0,Math.min(100,frac*100))+'%';
+  document.getElementById('txt-'+id).textContent=txt||'';
+  document.getElementById('num-'+id).textContent=num||'';}
+function refreshUI(){
+  if(!G)return;const h=G.hero;
+  document.getElementById('ui-hero').textContent=h.name;
+  document.getElementById('ui-level').textContent=h.level;
+  document.getElementById('ui-gold').textContent=h.gold;
+  document.getElementById('ui-bricks').textContent=h.bricks;
+  document.getElementById('ui-mood').textContent=moodFace();
+  document.getElementById('ui-mood').title='mood '+h.mood+'/100 · '+attBand();
+  document.getElementById('ui-motto').textContent='"'+h.motto+'"';
+  bar('hp',h.hp/h.hpMax,'', h.hp+'/'+h.hpMax);
+  bar('q',G.quest?G.quest.progress/G.quest.need:0,
+    G.quest?((G.quest.epic?'★ ':'')+(G.quest.text.length>44?G.quest.text.slice(0,44)+'…':G.quest.text)):'—',
+    G.quest?Math.floor(G.quest.progress/G.quest.need*100)+'%':'');
+  bar('xp',h.xp/h.xpNeed,'','lv '+h.level);
+  refreshGp();
+  if(curTab==='sheet')renderSheet();
+  if(curTab==='theo')renderTheo();
+}
+let curTab='diary';
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab');if(!t)return;
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');curTab=t.dataset.tab;
+  ['diary','sheet','theo'].forEach(id=>document.getElementById(id).style.display=id===curTab?'block':'none');
+  if(curTab==='sheet')renderSheet();
+  if(curTab==='theo')renderTheo();
+  if(curTab==='diary')renderDiary(false);});
+let typing=null;
+function renderDiary(newEntry){
+  if(curTab!=='diary')return;
+  const d=document.getElementById('diary');
+  const atBottom=d.scrollTop+d.clientHeight>d.scrollHeight-60;
+  const items=G.diary.slice(-120);
+  d.innerHTML=items.map((e,i)=>{
+    const last=i===items.length-1;
+    return `<div class="entry ${e.k}"><div class="when">${e.s}</div><div class="txt" ${last&&newEntry?'id="type-target"':''}>${last&&newEntry?'':esc(e.t)}</div></div>`;}).join('');
+  if(newEntry){const tgt=document.getElementById('type-target');
+    if(tgt){const txt=items[items.length-1].t;let i=0;
+      if(typing)clearInterval(typing);
+      typing=setInterval(()=>{i+=2;tgt.textContent=txt.slice(0,i);
+        if(atBottom)d.scrollTop=d.scrollHeight;
+        if(i>=txt.length){clearInterval(typing);typing=null;}},18);}}
+  if(atBottom)d.scrollTop=d.scrollHeight;
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+const ITEM_ICON={junk:'·',use:'⚗',curse:'☠',trophy:'✦'};
+function renderSheet(){
+  const h=G.hero;const S=computeStats(h);
+  document.getElementById('sheet').innerHTML=`
+    <h3>${esc(h.name)}</h3>
+    <div class="dim">${h.cls} — ${h.trait}, ${h.trait2}. Motto: "${h.motto}"</div>
+    <div class="row"><span>Level</span><b>${h.level}</b></div>
+    <div class="row"><span>Deaths (so far)</span><b>${h.deaths}</b></div>
+    <div class="row"><span>Gold</span><b>${h.gold}</b></div>
+    <div class="row"><span>Mood</span><b>${h.mood}/100 ${moodFace()}</b></div>
+    <div class="row"><span>Temple</span><b>${h.bricks}/${CONFIG.brickGoal} bricks</b></div>
+    <h3>Attributes</h3>
+    <div class="row"><span>Might <span class="dim">(melee)</span></span><b>${h.attr.mig}</b></div>
+    <div class="row"><span>Finesse <span class="dim">(precise, thrown, dodge)</span></span><b>${h.attr.fin}</b></div>
+    <div class="row"><span>Wits <span class="dim">(tricks, scrolls)</span></span><b>${h.attr.wit}</b></div>
+    <div class="row"><span>Grit <span class="dim">(HP, armor)</span></span><b>${h.attr.grd}</b></div>
+    <div class="row"><span class="dim">Offense / Defense</span><span class="loot">${S.off.toFixed(1)} / ${S.def.toFixed(1)}</span></div>
+    <div class="row"><span class="dim">Crit / Dodge / Block</span><span class="loot">${Math.round(S.crit*100)}% / ${Math.round(S.dodge*100)}% / ${Math.round(S.block*100)}%</span></div>
+    ${G.epic?`<div class="row"><span>Epic</span><b>★ ${esc(G.epic.title)} (${G.epic.step}/${G.epic.steps.length})</b></div>`:''}
+    ${G.grudge?`<div class="row"><span>Unfinished business</span><b>the ${esc(G.grudge.m)}</b></div>`:''}
+    <h3>Companions</h3>
+    ${G.pet?`<div class="row"><span>${esc(G.pet.name)} the ${esc(G.pet.sp)}</span><b>lv ${G.pet.lvl}${G.pet.ko?' (recovering)':''}</b></div>`:'<div class="dim">no pet yet — the road provides, eventually</div>'}
+    ${G.human?`<div class="loot">· traveling with ${esc(G.human)}</div>`:''}
+    ${G.fallen.map(f=>`<div class="dim">✝ ${esc(f.name)} the ${esc(f.sp)} — day ${f.d||f.day}</div>`).join('')}
+    <h3>Equipment</h3>
+    ${Object.keys(h.gear).map(s=>`<div class="row"><span>${s}</span><span class="loot">${gearName(s)} <span class="dim">+${h.gear[s]}</span></span></div>`).join('')}
+    <h3>Rivalry</h3>
+    <div class="row"><span>${esc(G.rival.name)} (lv ${G.rival.level})</span><b>${G.rival.heroScore} : ${G.rival.score}</b></div>
+    <h3>Satchel (${h.inv.length}/${CONFIG.invCap})</h3>
+    ${h.inv.map(i=>`<div class="loot">${ITEM_ICON[i.k]||'·'} ${esc(i.n)}${i.k==='curse'?' <span class="dim">(cursed)</span>':''}</div>`).join('')||'<div class="dim">empty, like my prospects</div>'}
+    <h3>Trophy shelf (${h.trophies.length})</h3>
+    ${h.trophies.map(t=>`<div class="loot">✦ ${esc(t)}</div>`).join('')||'<div class="dim">bare. so far.</div>'}`;
+}
+function renderTheo(){
+  const g=G.god;
+  const silence=Math.max(0,G.day-g.lastActDay);
+  const pct=Math.round((g.att+100)/2);
+  document.getElementById('theo').innerHTML=`
+    <h3>What the hero believes about you</h3>
+    <div class="scripture">“${esc(g.belief||beliefTemplate())}”</div>
+    <div class="dim">The hero is ${attBand()}. This colors every diary entry, where the gold goes (bricks vs. ale), and how your voice lands.</div>
+    <h3>Disposition</h3>
+    <div class="dim" style="display:flex;justify-content:space-between"><span>resentful</span><span>devoted</span></div>
+    <div class="meter"><i style="width:${pct}%;background:${g.att>=0?'#1e4a7a':'#8a2010'}"></i><b></b></div>
+    <h3>Your record</h3>
+    <div class="row"><span>Blessings</span><b>${g.bless}</b></div>
+    <div class="row"><span>Punishments</span><b>${g.smite}</b></div>
+    <div class="row"><span>Words spoken</span><b>${g.voices}</b></div>
+    <div class="row"><span>Resurrections</span><b>${g.resur}</b></div>
+    <div class="row"><span>Days of silence</span><b>${silence}</b></div>
+    <h3>What the hero remembers</h3>
+    ${G.memories.slice().reverse().map(m=>`<div class="dim">· day ${m.d} — ${esc(m.t)}</div>`).join('')||'<div class="dim">nothing yet — give the road time</div>'}
+    <h3>Running gags the ghostwriter knows</h3>
+    ${G.gags.map(x=>`<div class="dim">· ${esc(x)}</div>`).join('')||'<div class="dim">none yet — give it time</div>'}`;
+}
+/* export: the shipping department */
+document.getElementById('b-export').onclick=()=>{
+  if(!G)return;const h=G.hero;
+  const md=[`# The Diary of ${h.name}`,``,
+    `*${h.cls} — ${h.trait}, ${h.trait2}. Motto: "${h.motto}". Exported day ${G.day}.*`,``,
+    `## The Theology`,``,`> ${G.god.belief||beliefTemplate()}`,``,
+    `- Blessings: ${G.god.bless} · Punishments: ${G.god.smite} · Words: ${G.god.voices} · Resurrections: ${G.god.resur}`,``,
+    `## The Hero`,``,
+    `- Level ${h.level}, ${h.deaths} deaths, ${h.gold} gold, temple ${h.bricks}/${CONFIG.brickGoal}`,
+    ...(G.pet?[`- Companion: ${G.pet.name} the ${G.pet.sp} (lv ${G.pet.lvl})`]:[]),
+    ...G.fallen.map(f=>`- ✝ ${f.name} the ${f.sp}`),
+    ...(h.trophies.length?[``,`### Trophies`,``,...h.trophies.map(t=>`- ✦ ${t}`)]:[]),``,
+    `## The Diary`,``,
+    ...G.diary.map(e=>`**${e.s}** — ${e.t}`)].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown'}));
+  a.download=h.name.replace(/[^a-z]/gi,'_').toLowerCase()+'_diary.md';
+  a.click();URL.revokeObjectURL(a.href);
+};
+
+/* ---------- TIME ---------- */
+let beatBusy=false,beatTimer=null;
+async function beatLoop(){
+  if(beatBusy||!G||G.paused){schedule();return;}
+  beatBusy=true;
+  try{await beat();}catch(e){}
+  beatBusy=false;schedule();
+}
+function schedule(){
+  if(beatTimer)clearTimeout(beatTimer);
+  beatTimer=setTimeout(beatLoop,G&&G.mode==='rush'?CONFIG.rushBeatMs:CONFIG.liveBeatMs);
+}
+function setMode(m,btn){if(!G)return;
+  G.mode=m;G.paused=(m==='pause');
+  ['b-pause','b-live','b-rush'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  btn.classList.add('active');
+  if(beatTimer)clearTimeout(beatTimer);
+  if(!G.paused)beatTimer=setTimeout(beatLoop,400);
+}
+document.getElementById('b-pause').onclick=e=>setMode('pause',e.target);
+document.getElementById('b-live').onclick=e=>setMode('live',e.target);
+document.getElementById('b-rush').onclick=e=>setMode('rush',e.target);
+document.getElementById('b-shake').onclick=async()=>{
+  try{await window.storage.delete(CONFIG.storageKey);}catch(e){}
+  document.getElementById('diary').innerHTML='';
+  newHero();refreshUI();};
+
+/* ---------- catch-up: the picaresque continued while you were away ---------- */
+async function catchUp(){
+  if(!G)return;
+  const awayMs=Date.now()-(G.lastSeen||Date.now());
+  const missedBeats=Math.min(400,Math.floor(awayMs/CONFIG.liveBeatMs));
+  if(missedBeats<8)return;
+  setMetab('the diary catches itself up…');
+  const useLLMSaved=SETTINGS.useLLM;SETTINGS.useLLM=false;
+  const diaryLen=G.diary.length;
+  for(let i=0;i<missedBeats;i++){try{await beat();}catch(e){break;}}
+  SETTINGS.useLLM=useLLMSaved;
+  const happened=G.diary.slice(diaryLen).filter(e=>e.k==='mile').slice(-5).map(e=>e.t);
+  if(SETTINGS.useLLM&&happened.length){
+    try{
+      const out=await callLLM(
+        `You ghostwrite the diary of ${G.hero.name} (${G.hero.trait}, deadpan, currently ${attBand()}). Write ONE "while you were away" digest entry, 2-3 sentences, first person, addressing "my god" who has just returned to watching. Use ONLY the listed happenings.`,
+        `Time away: roughly ${Math.round(awayMs/3600000)} hours. Notable happenings: ${happened.join(' | ')}`,180);
+      writeEntry('holy',out.split('\n')[0]);
+    }catch(e){}}
+  setMetab();
+}
+
+/* ---------- persistence ---------- */
+async function save(){if(!G)return;G.lastSeen=Date.now();
+  try{await window.storage.set(CONFIG.storageKey,JSON.stringify(G));}catch(e){}}
+async function load(){
+  try{const r=await window.storage.get(CONFIG.storageKey);
+    if(!r||!r.value)return false;
+    const g=JSON.parse(r.value);
+    if(g.v!==4)return false;
+    G=g;G.paused=false;
+    R=mulberry32((G.seed+G.beats)|1);
+    return true;
+  }catch(e){return false;}
+}
+
+/* ---------- settings UI ---------- */
+const $s=id=>document.getElementById(id);
+$s('b-gear').onclick=()=>{
+  $s('set-provider').value=SETTINGS.provider;$s('set-baseurl').value=SETTINGS.baseUrl;
+  $s('set-model').value=SETTINGS.model;$s('set-apikey').value=SETTINGS.apiKey;
+  $s('set-temp').value=SETTINGS.temperature;$s('set-usellm').checked=SETTINGS.useLLM;
+  $s('testresult').textContent='';
+  $s('settings').style.display='flex';};
+function readForm(){SETTINGS.provider=$s('set-provider').value;
+  SETTINGS.baseUrl=$s('set-baseurl').value.trim();
+  SETTINGS.model=$s('set-model').value.trim()||SETTINGS.model;
+  SETTINGS.apiKey=$s('set-apikey').value.trim();
+  SETTINGS.temperature=parseFloat($s('set-temp').value)||0.9;
+  SETTINGS.useLLM=$s('set-usellm').checked;}
+$s('set-cancel').onclick=()=>{$s('settings').style.display='none';};
+$s('set-save').onclick=async()=>{readForm();await saveSettings();$s('settings').style.display='none';setMetab();};
+$s('set-test').onclick=async()=>{readForm();
+  const tr=$s('testresult');tr.textContent='knocking on heaven…';tr.style.color='#8d84a8';
+  const t0=Date.now();
+  try{const out=await callLLM('Reply with exactly four words.','Say: the quill is ready.',40);
+    tr.textContent=`✓ ${((Date.now()-t0)/1000).toFixed(1)}s — "${out.slice(0,50)}"`;tr.style.color='#8fc46a';}
+  catch(e){tr.textContent='✗ '+(e.message||'silence')+' — run locally for LAN endpoints';tr.style.color='#e05540';}};
+$s('settings').addEventListener('click',e=>{if(e.target.id==='settings')$s('settings').style.display='none';});
+
+/* ---------- boot ---------- */
+(async()=>{
+  await loadSettings();
+  resize();
+  const ok=await load();
+  if(!ok)newHero();
+  refreshUI();renderDiary(false);drawScene();
+  refillPool('monsters');refillPool('loot');refillPool('quests');
+  if(ok)await catchUp();
+  schedule();
+  setInterval(gpTick,2000);
+  setInterval(save,30000);
+})();
+</script>
+</body>
+</html>
