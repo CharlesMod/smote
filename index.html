@@ -29,6 +29,9 @@
   #left{flex:1 1 60%;display:flex;flex-direction:column;min-width:0;}
   #scenewrap{flex:1 1 auto;position:relative;background:#000;min-height:0;overflow:hidden;}
   canvas{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair;}
+  /* crisp text/label layer at native resolution — sits over the pixel-art canvas so labels
+     stay sharp instead of being upscaled 3x with the sprites */
+  #cvx{position:absolute;left:0;top:0;image-rendering:auto;pointer-events:none;}
   #caption{position:absolute;left:12px;bottom:8px;color:#cfc4e8;font-size:15px;
     text-shadow:0 2px 3px #000;pointer-events:none;max-width:90%;}
   #distwrap{position:absolute;left:10px;right:10px;top:8px;height:16px;background:rgba(18,13,32,0.8);
@@ -132,6 +135,7 @@
   <div id="left">
     <div id="scenewrap">
       <canvas id="cv"></canvas>
+      <canvas id="cvx"></canvas>
       <div id="distwrap"><div id="distbar"></div><div id="rivaltick" title="the rival band"></div><div class="lbl" id="distlbl"></div></div>
       <div id="caption"></div>
     </div>
@@ -192,13 +196,16 @@
    One file.
    ===================================================================== */
 const CONFIG={storageKey:'smote-march-v1',settingsKey:'smote2-settings-v1',
-  liveBeatMs:6500, rushBeatMs:220, model:'claude-sonnet-4-6',
-  partyCap:4};
+  liveBeatMs:9000, rushBeatMs:220, model:'claude-sonnet-4-6',
+  partyCap:4,
+  distStep:0.30,      /* leagues per march beat — smaller = a longer road (FTL/StS-length runs) */
+  joinCooldown:26,    /* beats between companions arriving — the road earns them, slowly */
+  soloProveWins:3};   /* solo victories before the first companion is drawn in */
 const SETTINGS={provider:'openai',baseUrl:'http://localhost:8080/v1',
   model:'gemma-4-text',apiKey:'',temperature:0.9,useLLM:true,noThink:true,sound:false};
 /* ---- balance knobs (calibrated by simulation; see window.simRuns) ---- */
 const BAL={
-  foeHp:0.85, foeAtk:3.4, foeDef:1.0, bossHp:1.1, bossAtk:2.0,
+  foeHp:0.85, foeAtk:3.15, foeDef:1.0, bossHp:1.1, bossAtk:2.0,
   xpBase:9, xpTier:3, xpBoss:20, xpNeedMul:1.4,
   goldGrunt:6, goldBoss:12, goldMul:1.3,
   effTier:0.55, effLvl:0.66,   /* foe difficulty = tier*effTier + partyLevel*effLvl (level-scaling) */
@@ -442,15 +449,15 @@ function gainRelic(source){
 }
 /* zones, left→right. len = encounters to cross. */
 const ZONES=[
- {name:'The Greenwood',biome:'meadow',len:5,tier:1,
+ {name:'The Greenwood',biome:'meadow',len:9,tier:1,
   foes:['Goblin','Dire Wolf','Bandit','Bog Sprite','Boar'],boss:'Gorehowl the Warg-Rider'},
- {name:'The Ashen Marsh',biome:'swamp',len:6,tier:1.8,
+ {name:'The Ashen Marsh',biome:'swamp',len:11,tier:1.8,
   foes:['Bog Zombie','Marsh Hag','Will-o-Wisp','Ghoul','Leech Knight'],boss:'Mother Mire'},
- {name:'The Emberwastes',biome:'desert',len:6,tier:2.4,
+ {name:'The Emberwastes',biome:'desert',len:12,tier:2.4,
   foes:['Imp','Fire Cultist','Ash Hound','Cinder Wraith','Salamander'],boss:'Pyrach the Kindler'},
- {name:'The Bonecrag',biome:'hills',len:7,tier:3.4,
+ {name:'The Bonecrag',biome:'hills',len:14,tier:3.4,
   foes:['Ogre','Demon-Knight','Wyvern','Bone Golem','Gargoyle'],boss:'General Skarn'},
- {name:'The Obsidian Gate',biome:'obsidian',len:5,tier:5,
+ {name:'The Obsidian Gate',biome:'obsidian',len:10,tier:5,
   foes:['Hell-Hound','Dread Cultist','Shadow Fiend','Abyssal Knight'],boss:'The Demon King'},
 ];
 const DEMON_FOES=['Imp','Fire Cultist','Cinder Wraith','Demon-Knight','Hell-Hound','Dread Cultist',
@@ -760,9 +767,11 @@ function mstats(m){
   if(hasRelic('gravelocket')&&G.party.some(o=>o.alive&&o.downed))critB+=0.06;
   if(hasRelic('wolftooth')&&(m.cls==='Champion'||m.cls==='Knight'||m.cls==='Rogue')){phys+=2;fin+=2;}
   if(m.scars)m.scars.forEach(s=>{if(s.crit)critB+=s.crit;});
-  /* alone on the road, nothing to guard but your own skin — careful, quick, hard to kill */
-  if(G&&G.party&&G.party.filter(x=>x.alive).length===1){def+=2.5;}
-  const soloDodge=(G&&G.party&&G.party.filter(x=>x.alive).length===1)?0.08:0;
+  /* alone on the road, nothing to guard but your own skin — careful, quick, very hard to kill.
+     the solo prologue is now a real stretch of the game; the lone hero must reliably survive it. */
+  const _solo=G&&G.party&&G.party.filter(x=>x.alive).length===1;
+  if(_solo){def+=4.5;phys+=1;fin+=1;}
+  const soloDodge=_solo?0.14:0;
   const crit=clamp(0.05+a.agi*0.02+(m.charm==='crit'?(g.charm||0)*0.03:0)+critB,0,0.6);
   const dodge=clamp(a.agi*0.012+(hasSt(m,'evade')?0.35:0)+(hasSt(m,'slow')?-0.05:0)
     +(tr('cowardly-but-lucky')?0.06:0)+soloDodge+(hasRelic('luckypebble')?0.03:0),0,0.6);
@@ -816,7 +825,7 @@ function makeFoe(name,tier,boss){
   const demon=DEMON_FOES.includes(name)||boss&&tier>=3;
   const s=standing();const pl=s.length?s.reduce((a,m)=>a+m.level,0)/s.length:1;
   /* difficulty tracks party level AND size: a lone soul meets a gentler road; a full party draws the worst */
-  const szf=s.length<=1?0.62:s.length===2?1.0:s.length===3?1.04:1.08;
+  const szf=s.length<=1?0.48:s.length===2?0.88:s.length===3?1.0:1.08;
   const eff=(tier*BAL.effTier+pl*BAL.effLvl)*szf;
   const base=5+eff*3.3;
   const f={name,tier,boss:!!boss,demon,arche,statuses:[],
@@ -1299,6 +1308,10 @@ function narrateFoe(f,r){
 }
 function onDeath(m,by){
   m.alive=false;m.downed=false;if(G.tele)G.tele.deaths++;
+  /* leave a body where they fell — we watch the party go down one at a time,
+     and after a wipe the field holds their corpses instead of an empty road.
+     _fellX is their last on-screen x; _fellT counts down a short crumple. */
+  m._fellX=(typeof m._sx==='number')?m._sx:null;m._fellT=16;
   const grave={name:m.name,cls:m.cls,zone:zone().name,run:G.meta.runs,
     epithet:m.epithet||null,scar:(m.scars&&m.scars[0])?m.scars[0].name:null,epitaph:null};
   G.meta.graves.push(grave);
@@ -1338,6 +1351,9 @@ async function endCombat(won){
   const cb=G.combat;const wasBoss=cb.boss;const foeName=cb.enemies[0]&&cb.enemies[0].name;
   G.combat=null;
   if(won){
+    /* the fight is won — the fallen are left to the road (the graves system carries them);
+       clear their battlefield corpses so they don't reappear in the next fight. */
+    G.party.forEach(m=>{if(!m.alive){m._fellX=null;m._fellT=0;}});
     /* XP + gold loot; downed allies survive wounded */
     const xp=cb.enemies.reduce((a,f)=>a+(f.boss?BAL.xpBoss:BAL.xpBase)+f.tier*BAL.xpTier,0);
     const gold=cb.enemies.reduce((a,f)=>a+(f.gold||0),0);
@@ -1364,7 +1380,8 @@ async function endCombat(won){
       closeCalls:downedNow.map(m=>firstName(m)).join(', ')||undefined});
     await flush(true);
     if(standing().length===1){G.soloWins=(G.soloWins||0)+1;
-      if(G.soloWins>=1&&!wasBoss)keystoneJoin('firstblood');}
+      /* the hero walks alone until they've truly proven it — no more instant second member */
+      if(G.soloWins>=CONFIG.soloProveWins&&!wasBoss&&G.dist>=3)keystoneJoin('firstblood');}
     if(wasBoss){
       if(chance(0.75))gainRelic(`the ${foeName}'s hoard`);
       advanceZone();
@@ -1511,7 +1528,8 @@ async function beat(){
 }
 async function marchBeat(){
   /* advance distance */
-  G.dist+=0.34;G.zoneDist+=0.34;
+  const ds=CONFIG.distStep;
+  G.dist+=ds;G.zoneDist+=ds;
   const z=zone();
   await rivalTick();
   if(G.state!=='march')return; /* a meeting can change everything */
@@ -1537,7 +1555,7 @@ async function marchBeat(){
     startCombat([bossFoe],true);await flush(true);return;
   }
   /* roll an encounter as we cross into each new "league" */
-  if(Math.floor(G.zoneDist)!==Math.floor(G.zoneDist-0.34)){
+  if(Math.floor(G.zoneDist)!==Math.floor(G.zoneDist-ds)){
     /* earned companions arrive at league-crossings, not by dice alone */
     if(G.valorPend&&keystoneJoin('valor')){G.valorPend=false;return;}
     if(G.stranger&&chance(0.5)&&keystoneJoin('stranger'))return;
@@ -1623,9 +1641,19 @@ const KEYSTONE_HOOKS={
 };
 function keystoneJoin(reason){
   if(standing().length>=CONFIG.partyCap)return false;
-  if(G.beats-(G.lastJoin||0)<10)return false; /* joins breathe — no pile-ups */
+  if(G.beats-(G.lastJoin||0)<CONFIG.joinCooldown)return false; /* joins breathe — no pile-ups */
   G.lastJoin=G.beats;
+  if(G._firstJoinBeat==null&&G.party.length===1)G._firstJoinBeat=G.beats; /* sim telemetry: when the first companion arrives */
+  const wasSolo=standing().length===1;
   doRecruit(KEYSTONE_HOOKS[reason]||pick(RECRUIT_HOOKS),reason==='stranger');
+  /* a companion arriving is an EVENT, not a footnote — the road stops to mark it */
+  if(!window.__sim){
+    const nm=G.party[G.party.length-1];
+    showBanner(wasSolo?'NO LONGER ALONE':'A COMPANION JOINS',
+      `${firstName(nm)} the ${nm.cls}`,'#7ad0a8');
+    SND.level&&SND.level();
+    if(G.combat)G.combat.pause=(G.combat.pause||0)+2; /* let the moment land */
+  }
   flush(true);
   return true;
 }
@@ -1958,12 +1986,42 @@ async function regenDoctrine(announce){
 
 /* ============================ RENDER ============================ */
 const cv=document.getElementById('cv');const ctx=cv.getContext('2d');
-let tick=0,scrollPos=0;const fx={bolt:0,rays:0,shake:0,nums:[],foenums:[],proj:[],sparks:[],slash:[],rings:[],weather:[],banner:null};
+const cvx=document.getElementById('cvx');const ctxx=cvx.getContext('2d');
+let LSCALE=3; /* canvas(1/3-res) coords -> overlay(native-res) px; set in resize() */
+/* the crisp-text layer: during a frame we collect label requests in canvas coords,
+   then paint them once on the native-res overlay so they never blur. */
+let labelBuf=[];
+function label(x,y,txt,o){o=o||{};labelBuf.push({x,y,txt:String(txt),
+  size:o.size||12,col:o.col||'#efdfb8',align:o.align||'left',weight:o.weight||'',bg:o.bg||null,pad:o.pad||3});}
+function flushLabels(){
+  ctxx.clearRect(0,0,cvx.width,cvx.height);
+  ctxx.textBaseline='alphabetic';
+  for(const L of labelBuf){
+    const fs=Math.round(L.size*LSCALE/3); /* label sizes are given in "canvas px"; scale to overlay */
+    ctxx.font=`${L.weight?L.weight+' ':''}${fs}px ui-monospace,'DejaVu Sans Mono',monospace`;
+    ctxx.textAlign=L.align;
+    const px=Math.round(L.x*LSCALE),py=Math.round(L.y*LSCALE);
+    if(L.bg){const w=ctxx.measureText(L.txt).width,pd=L.pad*LSCALE/3;
+      const bx=L.align==='center'?px-w/2-pd:L.align==='right'?px-w-pd:px-pd;
+      ctxx.fillStyle=L.bg;
+      if(ctxx.roundRect){ctxx.beginPath();ctxx.roundRect(bx,py-fs+1,w+pd*2,fs+pd,3*LSCALE/3);ctxx.fill();}
+      else ctxx.fillRect(bx,py-fs+1,w+pd*2,fs+pd);}
+    ctxx.fillStyle='rgba(0,0,0,0.55)';ctxx.fillText(L.txt,px+LSCALE/3,py+LSCALE/3); /* shadow for contrast on any bg */
+    ctxx.fillStyle=L.col;ctxx.fillText(L.txt,px,py);
+  }
+  labelBuf.length=0;
+}
+let tick=0,scrollPos=0,scrollVel=0.7;const fx={bolt:0,rays:0,shake:0,nums:[],foenums:[],proj:[],sparks:[],slash:[],rings:[],weather:[],banner:null};
 /* a title card: fades in, sits, fades out. the road deserves an announcer. */
 function showBanner(txt,sub,col){if(window.__sim)return;
   fx.banner={txt:String(txt||'').slice(0,28),sub:String(sub||'').slice(0,44),col:col||'#efdfb8',t:0,tt:110};}
 function resize(){const w=document.getElementById('scenewrap');
-  cv.width=Math.floor(w.clientWidth/3);cv.height=Math.floor(w.clientHeight/3);}
+  cv.width=Math.floor(w.clientWidth/3);cv.height=Math.floor(w.clientHeight/3);
+  /* overlay at native resolution (x devicePixelRatio for crisp text on hidpi) */
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cvx.width=Math.max(1,Math.round(w.clientWidth*dpr));cvx.height=Math.max(1,Math.round(w.clientHeight*dpr));
+  cvx.style.width=w.clientWidth+'px';cvx.style.height=w.clientHeight+'px';
+  LSCALE=cvx.width/Math.max(1,cv.width);}
 window.addEventListener('resize',resize);
 function pushNum(m,txt,c){const off=fx.nums.filter(n=>n.m===m&&n.t>20).length*7; /* stack, don't collide */
   fx.nums.push({m,txt,c,t:34,off});if(fx.nums.length>60)fx.nums.shift();}
@@ -2229,25 +2287,45 @@ function drawItemIcon(id,x,y){
 }
 function drawPack(W,H){
   if(!G)return;
-  let x=4;const y=11; /* top-left, under the march bar — the caption owns the bottom */
-  ctx.font='7px monospace';
-  ctx.fillStyle='#f0b840';ctx.beginPath();ctx.arc(x+3,y+5,3,0,7);ctx.fill();
-  ctx.fillStyle='#8a6a20';ctx.fillRect(x+2,y+4,3,1);
-  ctx.fillStyle='#efdfb8';ctx.fillText(String(G.gold),x+8,y+8);
-  x+=8+String(G.gold).length*5+7;
-  /* bread = rations; goes amber when the pack runs light */
-  ctx.fillStyle=(G.rations||0)>standing().length?'#c8a05a':'#e05540';
-  ctx.fillRect(x,y+3,6,4);ctx.fillStyle='#8a6a3a';ctx.fillRect(x+1,y+4,1,1);ctx.fillRect(x+3,y+5,1,1);
-  ctx.fillStyle='#cfc4e8';ctx.fillText(String(G.rations||0),x+8,y+8);
-  x+=8+String(G.rations||0).length*5+7;
-  (G.pack||[]).forEach(p=>{if(x>W-20)return; /* never run off the edge */
-    drawItemIcon(p.id,x,y);
-    ctx.fillStyle='#cfc4e8';ctx.fillText('×'+p.qty,x+9,y+8);
-    x+=9+('×'+p.qty).length*5+6;});
+  const iy=14,ty=23; /* icon top / text baseline, canvas coords — sits BELOW the progress bar (top:8px,h:16px ≈ canvas y8) so nothing hides behind it */
+  const gld=String(G.gold),rat=String(G.rations||0);
+  /* a dim pill behind it all so the counts read against any sky */
+  let est=6+8+gld.length*4+6+9+rat.length*4+6;
+  (G.pack||[]).forEach(p=>est+=10+('×'+p.qty).length*4+4);
+  est+=(G.relics||[]).length*7+6;
+  ctx.fillStyle='rgba(10,8,20,0.5)';const bw=Math.min(W-4,est);
+  if(ctx.roundRect){ctx.beginPath();ctx.roundRect(2,iy-4,bw,16,4);ctx.fill();}else ctx.fillRect(2,iy-4,bw,16);
+  let x=6;
+  /* gold */
+  ctx.fillStyle='#f0b840';ctx.beginPath();ctx.arc(x+3,iy+3,3.2,0,7);ctx.fill();
+  ctx.fillStyle='#9a7420';ctx.fillRect(x+2,iy+2,3,1);
+  label(x+8,ty,gld,{size:13,weight:'bold',col:'#ffdf8a'});
+  x+=8+gld.length*4+6;
+  /* rations (bread) — reddens when the pack runs light */
+  const rlow=(G.rations||0)<=standing().length;
+  ctx.fillStyle=rlow?'#e05540':'#c69a56';ctx.fillRect(x,iy+1,6,4);
+  ctx.fillStyle='#7a5a30';ctx.fillRect(x+1,iy+2,1,1);ctx.fillRect(x+3,iy+3,1,1);
+  label(x+9,ty,rat,{size:13,weight:'bold',col:rlow?'#ff9a86':'#ecdfc4'});
+  x+=9+rat.length*4+6;
+  /* pack items */
+  (G.pack||[]).forEach(p=>{if(x>W-24)return;
+    drawItemIcon(p.id,x,iy);
+    label(x+10,ty,'×'+p.qty,{size:12,col:'#dcd2f0'});
+    x+=10+('×'+p.qty).length*4+4;});
   /* relics: small violet diamonds, one per destiny */
-  (G.relics||[]).forEach((id,k)=>{if(x>W-12)return;
+  (G.relics||[]).forEach((id,k)=>{if(x+k*7>W-8)return;
     ctx.fillStyle='#b080ff';const dx=x+k*7;
-    ctx.fillRect(dx+2,y+3,2,2);ctx.fillRect(dx+1,y+4,4,2);ctx.fillRect(dx+2,y+6,2,2);});
+    ctx.fillRect(dx+2,iy+1,2,2);ctx.fillRect(dx+1,iy+2,4,2);ctx.fillRect(dx+2,iy+4,2,2);});
+}
+/* a fallen party member: the lying pose, dimmed, with a pool that reddens fresh and
+   greys as it settles. corpses persist through the fight they died in and the wipe hold. */
+function drawCorpse(m,x,gy){
+  x=Math.round(x);
+  drawMember(m,x,gy-20,{downed:true});
+  const fresh=(m._fellT||0)>0;
+  ctx.fillStyle=fresh?'rgba(150,40,40,0.5)':'rgba(58,54,66,0.55)';
+  ctx.fillRect(x-2,gy-2,14,2);
+  if(!fresh){ctx.fillStyle='rgba(14,12,20,0.28)';ctx.fillRect(x-2,gy-6,15,5);} /* the stillness reads darker */
 }
 /* the pet: 10px of unkillable morale. wolves get three legs. that is the joke and the law. */
 function drawPet(x,y,moving){
@@ -2278,6 +2356,7 @@ function drawScene(){
   try{
   if(window.__sim)return; /* headless sims don't pay for pixels */
   tick++;
+  labelBuf.length=0; /* fresh crisp-text layer each frame */
   const wrap=document.getElementById('scenewrap');
   if(cv.width!==Math.floor(wrap.clientWidth/3)||cv.height!==Math.floor(wrap.clientHeight/3)){resize();if(G)layoutParty();}
   const W=cv.width,H=cv.height;if(!G||W<40||H<40)return;
@@ -2298,8 +2377,13 @@ function drawScene(){
   else{ctx.fillStyle=dusk?'#ff9a50':'#ffe07a';ctx.beginPath();
     ctx.arc(W*(0.16+tod*0.6),H*(0.2+(dusk?0.1:0)),6,0,7);ctx.fill();}
   const gy=Math.floor(H*0.76);
-  /* the world scrolls continuously — slowing to a stop, never snapping */
-  scrollPos+=(G.state==='march')?0.7:0.05;
+  /* the world scrolls continuously — the velocity itself eases between walk and halt,
+     so march->combat has no snap. this is the reference "walking speed" everything else matches. */
+  const WALK=0.7;
+  /* the world halts when the march ends — a wipe leaves the party where they fell, not scrolling on */
+  const scrollTgt=(G.over&&G.outcome==='wipe')?0:(G.state==='march')?WALK:0.05;
+  scrollVel+=(scrollTgt-scrollVel)*0.06;
+  scrollPos+=scrollVel;
   const scroll=scrollPos;
   /* far ridge */
   ctx.fillStyle=night?'#141c30':pal.far;ctx.beginPath();ctx.moveTo(0,H);
@@ -2355,9 +2439,12 @@ function drawScene(){
       const boss=f.boss;const sz=boss?34:(f.arche==='brute'?24:20);
       const ex=Math.min(W-sz-4,exCur);exCur+=sz+9;
       const ey=gy-(i%2?3:0);
-      /* they come up the road to meet the party — no popping out of thin air */
-      if(f._ax==null)f._ax=W+26+(i%3)*14;
-      f._ax+=(ex-f._ax)*0.12;if(Math.abs(ex-f._ax)<0.6)f._ax=ex;
+      /* they come up the road to meet the party at WALKING pace — enter from just off the
+         right edge and close the gap capped near scroll speed, so there is no "zoom" (was
+         easing in from W+26 at 0.12 = a ~25x-walking lurch on the first frame). */
+      if(f._ax==null)f._ax=W+4+(i%3)*10;
+      const _cap=WALK*1.7; /* a purposeful stride, still continuous with the march */
+      f._ax+=clamp((ex-f._ax)*0.12,-_cap,_cap);if(Math.abs(ex-f._ax)<0.6)f._ax=ex;
       const dx=Math.round(f._ax);
       f._sx=dx;f._sy=ey-sz;
       if(f.hp<=0){ /* what's left: a small pile of bones */
@@ -2377,12 +2464,11 @@ function drawScene(){
       if(f.intent&&INTENT_GLYPH[f.intent.k]){const g2=INTENT_GLYPH[f.intent.k]; /* next move, worn on the shoulder */
         ctx.font='7px monospace';ctx.fillStyle=g2[1];ctx.fillText(g2[0],dx+sz-5,ey-sz+7);}
       if(G.selFoe===i){ctx.fillStyle='#f0b840';ctx.fillRect(dx+(sz>>1)-1,ey-sz-13,2,2);ctx.fillRect(dx+(sz>>1)-2,ey-sz-11,4,1);}
-      /* names only where they fit the fiction: bosses and the god's chosen target — the rest live in the log */
-      if(boss||G.selFoe===i){
-        const label=f.name.slice(0,boss?18:14);
-        const nx=Math.max(2,Math.min(dx-2,W-label.length*3.8-2));
-        ctx.font='6px monospace';ctx.fillStyle=boss?'#f0b840':'#efdfb8';
-        ctx.fillText(label,nx,ey-sz-8);}
+      /* every foe wears its name now, crisp on the overlay and centered over the sprite */
+      {const nm=f.name.length>18?f.name.slice(0,17)+'…':f.name;
+        const cx=clamp(dx+(sz>>1),nm.length*2.5,W-nm.length*2.5);
+        label(cx,ey-sz-9,nm,{size:boss?12:9,weight:boss?'bold':'',
+          col:boss?'#ffce55':(G.selFoe===i?'#ffe6a0':'#f2e8d0'),align:'center',bg:'rgba(8,6,16,0.42)'});}
       (f.statuses||[]).slice(0,4).forEach((s,k)=>{ctx.fillStyle=STCOL[s.k]||'#8d84a8';ctx.fillRect(dx+k*4,ey+2,3,2);});
       if(f.hurt>0)f.hurt--;
     });
@@ -2390,19 +2476,25 @@ function drawScene(){
     const FRONTC={Champion:1,Knight:1,Rogue:1};
     const front=living().filter(m=>FRONTC[m.cls]),back=living().filter(m=>!FRONTC[m.cls]);
     const place=(list,x0,dy)=>list.forEach((m,j)=>{
-      const tx0=Math.max(2,x0-j*15);
+      const tx0=Math.max(2,x0-j*24); /* wider spacing so bars + names don't collide */
       if(m._cx==null)m._cx=(m.x!=null?m.x:tx0); /* step up from wherever the march left them */
-      m._cx+=(tx0-m._cx)*0.14;if(Math.abs(tx0-m._cx)<0.6)m._cx=tx0;
+      m._cx+=clamp((tx0-m._cx)*0.14,-WALK*1.5,WALK*1.5);if(Math.abs(tx0-m._cx)<0.6)m._cx=tx0; /* capped: the line steps up, never lurches */
       const moving=Math.abs(tx0-m._cx)>1;
       m._sx=Math.round(m._cx);m._sy=gy-20-(j%2?3:0)-dy;
       const lg=m.lg>0?Math.sin((14-m.lg)/14*Math.PI)*10:0;if(m.lg>0)m.lg--;
       drawMember(m,m._sx,m._sy,{frame:moving?Math.floor(tick/7)+j:Math.floor(tick/9)+j,lunge:lg,cast:m.cast,hurt:m.hurt});
-      hpbar(m._sx,gy+3,16,m.hp/m.hpMax,'#e05540');hpbar(m._sx,gy+7,16,m.mp/Math.max(1,m.mpMax),'#5a9ad0');
-      (m.statuses||[]).slice(0,4).forEach((s,k)=>{ctx.fillStyle=STCOL[s.k]||'#8d84a8';ctx.fillRect(m._sx+k*4,gy+10,3,2);});
-      if(G.selId===m.id){ctx.fillStyle='#f0b840';ctx.fillRect(m._sx+4,m._sy-7,2,2);ctx.fillRect(m._sx+3,m._sy-5,4,1);}
+      hpbar(m._sx,gy+4,16,m.hp/m.hpMax,'#e05540');hpbar(m._sx,gy+8,16,m.mp/Math.max(1,m.mpMax),'#5a9ad0');
+      (m.statuses||[]).slice(0,4).forEach((s,k)=>{ctx.fillStyle=STCOL[s.k]||'#8d84a8';ctx.fillRect(m._sx+k*4,gy+12,3,2);});
+      if(G.selId===m.id){ctx.fillStyle='#f0b840';ctx.fillRect(m._sx+7,m._sy-7,2,2);ctx.fillRect(m._sx+6,m._sy-5,4,1);}
+      /* who is who — the name, crisp, under the bars */
+      label(m._sx+8,gy+22,firstName(m).slice(0,9),{size:9,align:'center',
+        col:G.selId===m.id?'#ffe6a0':'#e6f0d8',bg:'rgba(8,6,16,0.42)'});
       if(m.cast>0)m.cast--;if(m.hurt>0)m.hurt--;});
-    place(back,W*0.16,2);place(front,W*0.33,0);
-    /* downed lie where the line stood */
+    place(back,W*0.18,2);place(front,W*0.36,0);
+    /* the dead lie exactly where they fell — one body appears each time a member goes down,
+       and they stay down for the rest of the fight (no more vanishing into thin air) */
+    G.party.filter(m=>!m.alive&&m._fellX!=null).forEach(m=>{if(m._fellT>0)m._fellT--;drawCorpse(m,m._fellX,gy);});
+    /* downed (still alive) lie where the line stood */
     G.party.filter(m=>m.alive&&m.downed).forEach((m,i)=>{m._sx=W*0.25-i*14;m._sy=gy-6;
       drawMember(m,m._sx,gy-20,{downed:true});});
     /* the pet supervises from a safe, unhittable distance */
@@ -2428,18 +2520,24 @@ function drawScene(){
       ctx.fillStyle='#ffd98a';ctx.fillRect(fxx+3,gy-7,3,3);
       if(tick%5===0&&!window.__sim&&fx.sparks.length<320)
         fx.sparks.push({x:fxx+4+vrf(-2,2),y:gy-9,vx:vrf(-0.1,0.1),vy:vrf(-0.7,-0.3),g:0,t:vrnd(8,18),col:'#ffb050'});}
+    /* the march ended in a wipe: the field holds the fallen where they dropped */
+    if(G.over&&G.outcome==='wipe')
+      G.party.filter(m=>m._fellX!=null).forEach(m=>{if(m._fellT>0)m._fellT--;drawCorpse(m,m._fellX,gy);});
     standing().forEach((m,i)=>{
       const sit=G.state==='camp'&&i>0; /* the hero keeps watch */
-      const targetX=heroBaseX-i*14+(G.state==='camp'?Math.sin(i*2.1)*5:0);
+      const targetX=heroBaseX-i*18+(G.state==='camp'?Math.sin(i*2.1)*7:0); /* wider column — room to tell them apart */
       m.x+=(targetX-m.x)*0.1;
       const by=gy-20-(walking?(i%2?1:0):0)+(sit?3:0);
       m._sx=m.x;m._sy=by;
       drawMember(m,m.x,by,{frame:walking?Math.floor(tick/7)+i:0,sit,hurt:m.hurt});
       if(m.hurt>0)m.hurt--;
       if(G.selId===m.id){ctx.fillStyle='#f0b840';ctx.fillRect(m.x+4,by-7,2,2);ctx.fillRect(m.x+3,by-5,4,1);}
+      /* name tag so the column isn't a row of strangers */
+      label(m.x+6,gy+11,firstName(m).slice(0,9),{size:8,align:'center',
+        col:G.selId===m.id?'#ffe6a0':'#e6f0d8',bg:'rgba(8,6,16,0.4)'});
     });
     /* the pet trails the column; at camp it holds the fire's flank */
-    if(G.pet)drawPet(G.state==='camp'?heroBaseX+32:heroBaseX-standing().length*14-8,gy,walking&&G.state!=='camp');
+    if(G.pet)drawPet(G.state==='camp'?heroBaseX+32:heroBaseX-standing().length*18-8,gy,walking&&G.state!=='camp');
     /* the rival band, when paths cross — facing ours, sizing us up */
     if(G.rival&&G.rival.vis>0&&G.state==='march'){G.rival.vis--;
       const rvm=G.rival.members.filter(m=>m.alive);
@@ -2530,10 +2628,10 @@ function drawScene(){
       const bw=Math.max(b.txt.length*8.6,b.sub.length*4.6)+22,bx=(W-bw)/2,byy=H*0.2;
       ctx.fillStyle='rgba(8,6,18,0.78)';ctx.fillRect(bx,byy-4,bw,b.sub?28:20);
       ctx.fillStyle=b.col;ctx.fillRect(bx,byy-4,bw,1);ctx.fillRect(bx,byy+(b.sub?23:15),bw,1);
-      ctx.font='bold 12px monospace';ctx.textAlign='center';
-      ctx.fillStyle=b.col;ctx.fillText(b.txt,W/2,byy+8);
-      if(b.sub){ctx.font='7px monospace';ctx.fillStyle='#cfc4e8';ctx.fillText(b.sub,W/2,byy+18);}
-      ctx.textAlign='left';ctx.restore();}}
+      ctx.restore();
+      /* crisp banner text on the overlay */
+      if(a>0.35){label(W/2,byy+9,b.txt,{size:12,weight:'bold',col:b.col,align:'center'});
+        if(b.sub)label(W/2,byy+18,b.sub,{size:7,col:'#cfc4e8',align:'center'});}}}
   /* caption */
   const cap=document.getElementById('caption');
   cap.textContent=G.over?(G.outcome==='win'?'the Demon King is dead — the march is legend':
@@ -2541,6 +2639,7 @@ function drawScene(){
     (G.state==='combat'&&G.combat)?`battle — ${foesLabel(aliveEnemies())||'the last of them'}`:
     G.state==='camp'?`camp in ${z.name.toLowerCase()} — they rest, and talk`:
     `${z.name} — the march east, ${Math.round(G.distGoal-G.dist)} leagues to the keep`;
+  flushLabels(); /* paint the crisp text layer over everything */
   }catch(e){logErr('draw',e);}
 }
 
@@ -2776,18 +2875,24 @@ window.simRuns=async function(n){
   const prevLLM=SETTINGS.useLLM;SETTINGS.useLLM=false;window.__sim=true;
   if(typeof beatTimer!=='undefined'&&beatTimer)clearTimeout(beatTimer);
   const A={n:0,wins:0,wipeZone:[0,0,0,0,0],reach:[0,0,0,0,0],fights:0,downs:0,deaths:0,
-    gEarn:0,gSpend:0,items:0,hpwin:0,hpwinN:0,lvl:0,turns:0,err:null};
+    gEarn:0,gSpend:0,items:0,hpwin:0,hpwinN:0,lvl:0,turns:0,winBeats:0,wipeBeats:0,firstJoin:0,firstJoinN:0,err:null};
   for(let i=0;i<n;i++){
     newRun(true,((i+1)*2654435761)>>>0);G.paused=false;
-    let guard=0;while(!G.over&&guard++<6000){try{await beat();}catch(e){A.err=String(e)+' @'+G.state;break;}}
-    A.n++;if(G.outcome==='win')A.wins++;else A.wipeZone[G.zoneIdx]++;
+    G._firstJoinBeat=null;
+    let guard=0;while(!G.over&&guard++<20000){try{await beat();}catch(e){A.err=String(e)+' @'+G.state;break;}}
+    A.n++;if(G.outcome==='win'){A.wins++;A.winBeats+=G.beats;}else{A.wipeZone[G.zoneIdx]++;A.wipeBeats+=G.beats;}
     A.reach[G.zoneIdx]++;A.fights+=G.tele.fights;A.downs+=G.tele.downs;A.deaths+=G.tele.deaths;
     A.gEarn+=G.tele.gEarn;A.gSpend+=G.tele.gSpend;A.items+=G.tele.items;
     A.hpwin+=G.tele.hpwin;A.hpwinN+=G.tele.hpwinN;A.lvl+=Math.max(...G.party.map(m=>m.level));A.turns+=G.beats;
+    if(G._firstJoinBeat!=null){A.firstJoin+=G._firstJoinBeat;A.firstJoinN++;}
     if(A.err)break;
   }
   SETTINGS.useLLM=prevLLM;window.__sim=false;
+  const beatMs=CONFIG.liveBeatMs/1000;
   return {runs:A.n,winRate:+(A.wins/A.n).toFixed(3),wipeByZone:A.wipeZone,reachByZone:A.reach,
+    avgBeats:Math.round(A.turns/A.n),avgWinBeats:A.wins?Math.round(A.winBeats/A.wins):0,avgWipeBeats:Math.round(A.wipeBeats/Math.max(1,A.n-A.wins)),
+    winMinutes:A.wins?+((A.winBeats/A.wins)*beatMs/60).toFixed(1):0,medMinutes:+((A.turns/A.n)*beatMs/60).toFixed(1),
+    avgFirstJoinBeat:A.firstJoinN?Math.round(A.firstJoin/A.firstJoinN):0,
     avgFights:+(A.fights/A.n).toFixed(1),avgDownsPerRun:+(A.downs/A.n).toFixed(1),avgDeathsPerRun:+(A.deaths/A.n).toFixed(2),
     avgHpAtWin:+(A.hpwin/Math.max(1,A.hpwinN)).toFixed(2),avgGoldEarned:Math.round(A.gEarn/A.n),
     avgGoldSpent:Math.round(A.gSpend/A.n),avgItems:+(A.items/A.n).toFixed(1),avgMaxLevel:+(A.lvl/A.n).toFixed(1),err:A.err};
