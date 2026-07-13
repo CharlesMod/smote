@@ -67,6 +67,7 @@
   .entry.mile .txt{color:#402808;font-weight:bold;}
   .entry.talk .txt{color:#3a5a2a;font-style:italic;}
   .entry.act .txt{color:#5a3a6a;}
+  .entry.foe .txt{color:#a03828;}
   .pane h3{color:#5a3a10;font-size:18px;margin:9px 0 4px;border-bottom:1px solid var(--parchdk);}
   .pane .row{display:flex;justify-content:space-between;margin:2px 0;}
   .pane .dim{color:#8a6a3a;}
@@ -205,7 +206,7 @@ const SETTINGS={provider:'openai',baseUrl:'http://localhost:8080/v1',
   model:'gemma-4-text',apiKey:'',temperature:0.9,useLLM:true,noThink:true,sound:false};
 /* ---- balance knobs (calibrated by simulation; see window.simRuns) ---- */
 const BAL={
-  foeHp:0.85, foeAtk:3.15, foeDef:1.0, bossHp:1.1, bossAtk:2.0,
+  foeHp:0.85, foeAtk:3.42, foeDef:1.0, bossHp:1.1, bossAtk:2.15,
   xpBase:9, xpTier:3, xpBoss:20, xpNeedMul:1.4,
   goldGrunt:6, goldBoss:12, goldMul:1.3,
   effTier:0.55, effLvl:0.66,   /* foe difficulty = tier*effTier + partyLevel*effLvl (level-scaling) */
@@ -281,7 +282,19 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
   t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 let R=mulberry32(Date.now()%2**31);
 const pick=a=>a[Math.floor(R()*a.length)];
-const vpick=a=>a[Math.floor(Math.random()*a.length)]; /* narration-only variety — never the seeded dice */
+/* narration-only variety — never the seeded dice. Now with a no-repeat window:
+   a line won't come back until the pool is exhausted or it ages out, so small pools
+   stop feeling like a broken record. (Math.random, so sim determinism is untouched.) */
+let _vseen=[];
+const vpick=a=>{
+  if(!a||!a.length)return'';
+  if(a.length===1)return a[0];
+  let pool=a.filter(x=>!_vseen.includes(x));
+  if(!pool.length)pool=a;
+  const v=pool[Math.floor(Math.random()*pool.length)];
+  _vseen.push(v);if(_vseen.length>60)_vseen.shift();
+  return v;
+};
 const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
 const rf=(a,b)=>a+R()*(b-a);
 const chance=p=>R()<p;
@@ -342,6 +355,35 @@ const TRAITS=['vain','cowardly-but-lucky','gluttonous','sentimental','pedantic',
 const MOTTOS=['Smite me if I\'m wrong','Gold first, glory eventually','This counts as cardio',
  'Chosen-ish','Will quest for food','Vaguely destined','My other sword is a spoon',
  'Dying is a scam','Receipts or it didn\'t happen','Onward, reluctantly'];
+/* PERSONALITY MATRIX: four orthogonal axes drawn independently, so a party of four is four
+   genuinely different people (~28k combos before class/traits). These seed the LLM's VOICE —
+   the biggest fix for "everyone sounds the same" is bearing (the emotional register). */
+const BEARINGS=['anxious and over-prepared','sunny in the face of all evidence',
+ 'sardonic, braced for the worst','stoic to the point of rudeness','hot-tempered, easily baited',
+ 'melancholic, mourning something unnamed','relentlessly, exhaustingly upbeat',
+ 'world-weary, has buried friends','a zealot, certain of the cause','twitchy and superstitious',
+ 'unbothered, very nearly asleep','grandiose, narrating their own legend','prickly and defensive',
+ 'gentle and apologetic, secretly steel'];
+const PASTS=['a former tax auditor','a disgraced village baker','an ex-monastery scribe',
+ 'a retired canal boatman','a washed-up tourney champion','a former goose farmer',
+ 'a court poet nobody commissioned','a onetime funeral director','a failed alchemy apprentice',
+ 'an ex-lighthouse keeper','a runaway from an arranged marriage','a cashiered city guard',
+ 'a former traveling dentist','an apprentice cartographer who got lost and kept walking'];
+const DRIVES=['wants to go home, won\'t say to whom','out to prove a sibling wrong',
+ 'in it strictly for the gold','chasing one clean act of redemption','here because staying was worse',
+ 'a true believer in the mission','collecting a story worth telling','one step ahead of a debt',
+ 'wants their name in a song','just wants everyone to get along','searching for someone lost on this road',
+ 'settling a score with a dead man'];
+const QUIRKS=['names every weapon they own','keeps a meticulous grievance ledger',
+ 'reviews each meal like a food critic','will not step on cracks','cites regulations that may not exist',
+ 'hums hymns at the worst moments','pockets small useless souvenirs','apologizes to the things they kill',
+ 'insists on proper introductions mid-battle','keeps trying to befriend the monsters',
+ 'counts everything, then recounts','hands out unsolicited nicknames'];
+/* a compact persona line for prompts — the character, not a class */
+function persona(m){return [m.bearing,m.past,m.drive].filter(Boolean).join('; ')
+  +(m.quirk?` — ${m.quirk}`:'')
+  +(m.trait?`; ${m.trait}${m.trait2&&m.trait2!==m.trait?'/'+m.trait2:''}`:'')
+  +(m.motto?`; motto "${m.motto}"`:'');}
 /* classes: attribute bias, base spell kit, and spell learned at each level milestone */
 const CLASSES={
   Champion:{bias:['str','vit'],col:'#c85a3a',kit:['cleave'],learn:{2:'shieldwall',4:'taunt',6:'rally'}},
@@ -560,6 +602,7 @@ function newMember(cls,levelTarget){
     hp:0,hpMax:0,mp:0,mpMax:0,sp:0,spMax:0,spells:C.kit.slice(),
     skills:{},gear:{weapon:0,armor:0,charm:0},charm:pick(CHARMS),
     trait:pick(TRAITS),trait2:pick(TRAITS),motto:vpick(MOTTOS),
+    bearing:vpick(BEARINGS),past:vpick(PASTS),drive:vpick(DRIVES),quirk:vpick(QUIRKS),
     faith:rnd(30,55),morale:rnd(55,75),alive:true,downed:false,statuses:[],
     x:0,tx:0,hurt:0,cast:0};
   C.bias.forEach(b=>m.attr[b]+=2);
@@ -660,9 +703,35 @@ const TEMPLATES={
     `Passed a rock shaped like you. We saluted it, just in case.`,
     `The keep looks no closer. The horizon has been reported for dishonesty.`,
     `Weather occurred. We walked through it, the alternative also being walking.`,
-    `Morale: fine. Boots: damp. Onward.`]),
+    `Morale: fine. Boots: damp. Onward.`,
+    `Found a milestone. It said the keep was closer than it feels. We do not trust the milestone.`,
+    `An hour of walking, resolved unanimously to have been an hour of walking.`,
+    `Somebody started a marching song. It was voted down in committee, mid-verse.`,
+    `We are making excellent time toward a place we would rather not arrive.`,
+    `The road forked, apologised, and un-forked. We took the apology.`,
+    `Counted the dead kings on our list. Still one. Still ahead. Still walking.`,
+    `A signpost pointed east and also, unhelpfully, at us.`,
+    `Lunch was eaten standing up, out of spite, mostly at the ${zone().biome}.`,
+    `Nothing tried to kill us for a whole league. We logged it as suspicious.`,
+    `The sun moved. We moved. Only one of us is being paid for it, and it isn't the sun.`,
+    `A bird watched us pass and said nothing. We have chosen to find that ominous.`,
+    `We debated whether we are heroes or just the people currently walking east. Tabled.`,
+    `Crossed a stream. It was cold and had opinions about our boots.`,
+    `The ${zone().biome} smells like a decision we already regret.`,
+    `We passed a fork, a fallen tree, and a strong sense of being watched. Two of three confirmed.`,
+    `Someone recalculated the distance to the keep. Someone else asked them to stop.`,
+    `A good stretch of road: level, dry, and entirely uninterested in killing us.`,
+    `We stepped over the exact spot where a lesser party would have given up. Noted it. Kept walking.`,
+    `The horizon did that thing where it stays exactly where it is. We resent the horizon.`,
+    `Traded three words and a look. Morale holds, held together with spit and spite.`,
+    `A cairn by the road, built by someone with time and grief to spare. We add a stone and move on.`,
+    `We are, by unanimous exhausted vote, still going. Minutes filed. Objections overruled by geography.`]),
   arrive_zone:d=>vpick([`We have entered ${d.name}. The air is different here. Nobody consented to that either.`,
-    `${d.name}. The brochure said nothing, because there is no brochure, because nobody comes back to write one.`]),
+    `${d.name}. The brochure said nothing, because there is no brochure, because nobody comes back to write one.`,
+    `${d.name} begins where the last horror ended, which is a scheduling choice we resent.`,
+    `We have crossed into ${d.name}. It was here the whole time, waiting, which is the rudest part.`,
+    `${d.name}. The map calls it that. The map has not been here. We have notes for the map.`,
+    `Welcome, said no one, to ${d.name}. We welcomed ourselves. It felt hollow and we did it anyway.`]),
   event:d=>`We came upon ${d.e}. ${d.r}`,
   recruit:d=>`${d.n}, ${d.cls}, ${d.hook}. ${d.motto?`Their motto: "${d.motto}." `:''}They have joined us — verbally, then legally. We number ${d.size}.`,
   fight_start:d=>`Trouble: ${d.foes}. ${d.foes&&d.foes.includes(',')?'They look':'It looks'} ${vpick(['under-rested','litigious','moist','overconfident','uninsured','ready'])}. Weapons out.`,
@@ -670,20 +739,38 @@ const TEMPLATES={
   victory:d=>vpick([`Victory. We remain, as ever, mostly intact. ${d.loot||''}`,
     `Slain. ${d.loot||'They dropped nothing but expectations.'}`,
     `We won. Added ${d.foes||'the lot of them'} to the list of things we never want to see again. ${d.loot||''}`]),
-  down:d=>`${d.n} is on the ground. The ground is fine, thanks for asking. ${d.n} is less fine.`,
-  death:d=>`${d.n} is dead. ${d.by?'The '+d.by+' made sure of it. ':''}We buried them with their boots on, which they would have called wasteful. We walk on, smaller.`,
+  down:d=>vpick([`${d.n} is on the ground. The ground is fine, thanks for asking. ${d.n} is less fine.`,
+    `${d.n} goes down hard. Still with us, technically, which is the bar these days.`,
+    `${d.n} hits the dirt and stays there, taking a moment they did not schedule.`,
+    `${d.n} is down — breathing, swearing, not standing. Two out of three.`,
+    `That one found ${d.n}. ${d.n} is horizontal and unhappy about the arrangement.`]),
+  death:d=>vpick([`${d.n} is dead. ${d.by?'The '+d.by+' made sure of it. ':''}We buried them with their boots on, which they would have called wasteful. We walk on, smaller.`,
+    `${d.n} is gone.${d.by?' A '+d.by+' did it. ':' '}We say the short version of the eulogy, because that is the only version the road allows.`,
+    `We lose ${d.n} today.${d.by?' To a '+d.by+'.':''} The pack is lighter by one bedroll and immeasurably heavier otherwise.`,
+    `${d.n} does not get up. ${d.by?'The '+d.by+' can be proud, if it lives. ':''}We divide their kit and their absence, and only one of those fits in the pack.`]),
   levelup:d=>d.txt,
   camp:d=>vpick([`Camp. Fire, watch-shifts, a soup that contains a clue, or possibly a boot.`,
     `We stopped while there was light enough to argue about where to stop. The argument was nourishing.`,
     `Boots off. Everyone regrets it. The fire regrets it most.`,
     `Night. Something in the dark crackled back at the fire. We have elected to call it an owl.`,
-    `Camp raised. Dinner divided by strict seniority, then re-divided by force of personality.`]),
+    `Camp raised. Dinner divided by strict seniority, then re-divided by force of personality.`,
+    `We told the story of today around the fire. It improved considerably in the telling.`,
+    `Watch rota drawn up, disputed, redrawn, ignored. Someone stayed awake anyway, resentfully.`,
+    `The fire is the only one of us not carrying anything, and it still complains.`,
+    `We sharpened what could be sharpened and worried about the rest. Standard evening.`,
+    `Sleep, in shifts, on ground that has clearly never met a mattress and never wants to.`,
+    `Rations counted twice, came out different both times. We have chosen the more generous count.`,
+    `Someone asked what we'll do after the keep. The fire crackled. We changed the subject.`]),
   king_dead:d=>`THE DEMON KING IS DEAD. ${d.who} struck the blow. The world is saved — the whole thing, even the parts that never wrote back. What now? Everything.`,
   wipe:d=>`We fall in ${zone().name}, ${d.dist} leagues short of the keep. To whoever finds this log: we were ${d.size||'few'}, we were briefly magnificent, and the soup at the last waystation contains a clue. Be taught.`,
   /* the god no longer intervenes; the party occasionally notes the silence anyway */
   silence:d=>vpick([`We asked for a sign before ${d.about||'the fight'}. The weather continued.`,
     `Prayers were offered. Receipt not confirmed. We proceeded on foot, as usual.`,
-    `${d.who||'Someone'} looked up mid-crisis, just in case. The sky maintained its position.`]),
+    `${d.who||'Someone'} looked up mid-crisis, just in case. The sky maintained its position.`,
+    `We addressed the heavens re: ${d.about||'this'}. The heavens were, as ever, out of office.`,
+    `A moment of silence was requested of the god. The god exceeded expectations.`,
+    `We left the matter of ${d.about||'the fight'} with you. It is still here. So are we, barely.`,
+    `Faith remains a one-way correspondence. We keep writing. Postage is our own.`]),
   talk:d=>d.txt,
   doctrine:d=>`Our official position on you has been revised. ${d.txt||''}`,
 };
@@ -696,17 +783,19 @@ async function flush(milestone){
     (f.type==='death'||f.type==='wipe')?'smite':
     f.type==='talk'?'talk':
     ['recruit','levelup','boss_start','king_dead','arrive_zone','victory'].includes(f.type)?'mile':'plain';
-  /* templates cover the gaps; milestones — and a healthy cut of ordinary moments — get the ghostwriter.
+  /* templates cover the gaps; milestones AND most ordinary moments get the ghostwriter now —
+     the model is the real variety engine, templates are only the offline fallback.
      (order matters: with the LLM off, no seeded dice are consumed — sims stay deterministic) */
-  if(!SETTINGS.useLLM||(!milestone&&Math.random()>0.3)){writeEntry(kind,tmpl);return;}
-  const recent=G.chron.slice(-3).map(e=>'"'+e.t+'"').join(' ');
+  const LLMP={march:0.55,event:0.85,camp:0.8,silence:0.7,fight_start:0.85}[f.type]??0.78;
+  if(!SETTINGS.useLLM||(!milestone&&Math.random()>LLMP)){writeEntry(kind,tmpl);return;}
+  const recent=G.chron.slice(-6).map(e=>'"'+e.t+'"').join(' ');
   const roster=standing().map(m=>firstName(m)+' the '+m.cls+(m.epithet?' ('+m.epithet+')':'')).join(', ')
     +(G.pet?`, plus ${G.pet.name} (a ${G.pet.kind}, morale asset)`:'');
   try{
     setMetab('the chronicler writes…');
     const t0=Date.now();
     const out=await callLLM(
-      `You ghostwrite the shared road-log of a march to slay the Demon King. The party writes it TO their god — the god is the reader. First person plural ("we", plus names). ${voiceBlock()}\nParty: ${roster}. Write 1-3 short sentences about the LAST event only, using exactly one mechanism. Petty and specific beats epic every time. Never invent names or outcomes. No quotes around it.`,
+      `You ghostwrite the shared road-log of a march to slay the Demon King. The party writes it TO their god — the god is the reader. First person plural ("we", plus names). ${voiceBlock()}\nParty: ${roster}. Write 1-3 short sentences about the LAST event only, using exactly one mechanism. Petty and specific beats epic every time. Never invent names or outcomes. No quotes around it.\nVARIETY IS THE JOB: do NOT reuse any joke, image, metaphor, or sentence-shape that appears in Recent — if a phrasing feels familiar, throw it out and find a fresh angle. Two log lines should never sound interchangeable.`,
       `Story so far: ${G.saga||'It has only just begun.'}\n${gagBlock()}${G.rumor?'A tavern rumor follows them: "'+G.rumor+'". ':''}Zone: ${zone().name}. Recent: ${recent}\nEvent: ${facts.map(x=>x.type+' '+JSON.stringify(x.data||{})).join('; ')}`,170);
     G.genCount++;G.lastGenMs=Date.now()-t0;setMetab();
     const txt=out.split('\n').filter(l=>l.trim()).slice(0,2).join(' ').slice(0,440);
@@ -804,7 +893,7 @@ function foeAffinity(name,demon,boss){
 }
 function elMod(el,target){
   let m=1;
-  if(target.ghostly&&(!el||el==='phys'))m*=0.6;  /* blades pass through what isn't there */
+  if(target.ghostly&&(!el||el==='phys'))m*=0.78; /* blades slip through the half-there — a real penalty, not a wall (5 of 7 classes have only steel) */
   if(el==='holy'&&target.demon)m*=1.6;
   if(target.el&&target.el===el)m*=0.55;          /* resist own element */
   else if(target.weak&&target.weak===el)m*=1.5;  /* fears it */
@@ -836,6 +925,9 @@ function makeFoe(name,tier,boss){
   else if(arche==='skirmisher'){f.hp=base*1.4;f.atk*=1.15;f.fast=true;}
   else if(arche==='boss'){f.hp=base*(name==='The Demon King'?5.5:3.6);f.atk*=1.5;f.def+=2;f.el=f.el||'dark';}
   else f.hp=base*1.6;
+  /* the half-there are FLIMSY: hard to hit with steel but quick to disperse, never a wall of HP.
+     without this a wisp + a caster-less party (5 of 7 classes) is an un-winnable grind. */
+  if(f.ghostly){f.hp*=0.7;if(arche==='brute'){f.def-=1;}}
   f.hp=Math.round(f.hp*(boss?BAL.bossHp:BAL.foeHp));f.hpMax=f.hp;
   f.atk=+(f.atk*(boss?BAL.bossAtk:BAL.foeAtk)).toFixed(1);
   f.def=+(f.def*BAL.foeDef).toFixed(1);
@@ -892,7 +984,7 @@ function tickStart(u){ /* returns true if the unit should skip its turn */
   u.statuses=(u.statuses||[]).map(s=>({...s,n:s.n-1})).filter(s=>s.n>0);
   return skip;
 }
-function aliveEnemies(){return G.combat.enemies.filter(f=>f.hp>0);}
+function aliveEnemies(){return G.combat?G.combat.enemies.filter(f=>f.hp>0):[];}
 function targetEnemyIdx(prefBoss){
   const es=G.combat.enemies;
   let best=-1,bv=1e9;
@@ -1164,7 +1256,7 @@ async function partyTurn(m){
       const grudge=m.downedBy&&cb.enemies.some(f=>f.hp>0&&f.name===m.downedBy)?
         `A ${m.downedBy} once put you in the dirt — one of them is HERE. `:'';
       const out=await callLLM(
-        `You ARE ${m.name}${m.epithet?', '+m.epithet:''}, a ${m.cls} (${m.trait}, ${m.trait2}) fighting for your party's life. Battle-shout voice: deadpan fantasy-parody — dry, petty, quietly brave (e.g. "${seedLines(1)[0]}"). TACTICS: hit what an enemy FEARS (bracketed hints); don't feed an element it resists; answer declared INTENTs. Pick ONE action. Output ONLY JSON: {"action":"cast|attack|item","spell":"<a spell id, or 'attack'>","item":"<a pack item id if action=item>","target":<enemy index for damage, or ally id for heal/buff>,"line":"a 4-10 word battle-shout, in character"}.`,
+        `You ARE ${m.name}${m.epithet?', '+m.epithet:''}, a ${m.cls}. YOUR CHARACTER: ${persona(m)}. Shout in YOUR OWN register — a "${m.bearing}" ${m.past} does not sound like anyone else here. Fantasy-parody, specific to you, never generic-heroic (e.g. "${seedLines(1)[0]}"). TACTICS: hit what an enemy FEARS (bracketed hints); don't feed an element it resists; answer declared INTENTs. Pick ONE action. Output ONLY JSON: {"action":"cast|attack|item","spell":"<a spell id, or 'attack'>","item":"<a pack item id if action=item>","target":<enemy index for damage, or ally id for heal/buff>,"line":"a 4-10 word battle-shout, in character"}.`,
         `${grudge}You: ${Math.round(m.hp)}hp ${m.mp}mp ${m.sp}sp. Spells (cost+pool): ${spellList}. Shared pack: ${packList}. ${relicList?'Party relics (lean into them): '+relicList+'. ':''}Enemies: ${enemyList}. Allies: ${allyList}.`,150);
       setMetab();
       const j=parseJSON(out);
@@ -1286,25 +1378,57 @@ function narrateParty(m,act,res){
     else mm=`${firstName(m)} uses ${res.item}.`;writeEntry('act',(line?line+' ':'')+mm);return;}
   const sp=SPELLS[act.spell]||SPELLS.attack;
   let mech='';
-  if(res.revived)mech=`${firstName(m)} revives ${res.revived}.`;
-  else if(res.heals&&res.heals.length)mech=`${firstName(m)} casts ${sp.name} (+${res.heals[0].heal}).`;
-  else if(res.buff)mech=`${firstName(m)} casts ${res.buff}.`;
-  else if(res.ctrl)mech=`${firstName(m)} casts ${res.ctrl}.`;
+  if(res.revived)mech=`${firstName(m)} ${vpick(['revives','hauls up','calls back','drags back into the fight','gets a pulse out of'])} ${res.revived}.`;
+  else if(res.heals&&res.heals.length)mech=`${firstName(m)} ${vpick(['mends','patches up','knits shut','pours light into','tends','steadies'])} ${res.heals[0].who} (+${res.heals[0].heal}).`;
+  else if(res.buff)mech=`${firstName(m)} ${vpick(['raises','works','calls up','sets','kindles'])} ${res.buff}.`;
+  else if(res.ctrl)mech=`${firstName(m)} ${vpick(['works','calls up','weaves','lays down'])} ${res.ctrl}.`;
   else if(res.hits&&res.hits.length){const tot=res.hits.reduce((a,h)=>a+h.dmg,0);
-    const verb=sp.name==='attack'?vpick(['strikes','opens up','clips','hammers','gets a piece of','introduces the blade to']):'casts '+sp.name;
+    const verb=sp.name==='attack'?vpick(['strikes','opens up','clips','hammers','gets a piece of','introduces the blade to','carves into','lays into']):vpick(['looses','calls down','hurls','unleashes','lets fly with'])+' '+sp.name;
     mech=`${firstName(m)} ${verb}${res.hits.length>1?' (all)':' '+res.hits[0].foe}${res.hits.some(h=>h.crit)?' — crit!':''} for ${tot}.`;}
   writeEntry('act',(line?line+' ':'')+mech);
 }
 function narrateFoe(f,r){
   if(!r)return;
   flushPrep(); /* the enemy answers; the ritual line lands first */
-  /* only the notable beats reach the log — routine hits show as floating numbers on the canvas */
-  if(r.kill){writeEntry('smite',`${f.name} falls upon ${firstName(r.kill)}. ${firstName(r.kill)} does not rise.`);
+  if(r.kill){writeEntry('smite',vpick([
+    `${f.name} falls upon ${firstName(r.kill)}. ${firstName(r.kill)} does not rise.`,
+    `${f.name} finishes what it started with ${firstName(r.kill)}. The log gets shorter by one name.`,
+    `${firstName(r.kill)} is gone — ${f.name} made certain of it. We will grieve on the move.`,
+    `${f.name} takes ${firstName(r.kill)} off the board for good. Nobody has breath to say it aloud.`]));
     onDeath(r.kill,f.name);return;}
-  if(r.charge){writeEntry('smite',`${f.name} plants its feet and begins to GATHER something. The air goes wrong. Nobody is coming to interrupt it but us.`);return;}
-  if(r.big){writeEntry('smite',`${f.name} UNLEASHES it — the whole line is thrown.`);return;}
-  if(r.aoe){writeEntry('plain',`${f.name} lashes the whole line.`);return;}
-  if(r.downed){writeEntry('plain',`${f.name} drops ${r.who}!`);SND.down();return;}
+  if(r.charge){writeEntry('smite',vpick([
+    `${f.name} plants its feet and begins to GATHER something. The air goes wrong.`,
+    `${f.name} winds up for something enormous. The hair on every arm stands up at once.`,
+    `${f.name} goes still and starts to draw the dark in. This will not be small.`,
+    `Something is building around ${f.name} — pressure, wrongness, a held breath that isn't ours.`]));return;}
+  if(r.big){const tot=(r.hits||[]).reduce((a,h)=>a+h.dmg,0);const s=tot?` for ${tot}`:'';
+    writeEntry('smite',vpick([
+      `${f.name} UNLEASHES it — the whole line is thrown${s}.`,
+      `${f.name} lets it all go at once${s}. The world briefly turns white.`,
+      `Whatever ${f.name} was holding, it holds no longer${s}. Everyone is on the ground or wishing they were.`,
+      `${f.name} empties itself into one blow${s}. We are still counting who's up.`]));return;}
+  if(r.aoe){const tot=(r.hits||[]).reduce((a,h)=>a+h.dmg,0);const s=tot?` for ${tot}`:'';
+    writeEntry('foe',vpick([
+      `${f.name} lashes the whole line${s}.`,
+      `${f.name} sweeps across all of us${s}. Democratic, at least.`,
+      `${f.name} catches everyone at once${s} — no favorites.`,
+      `${f.name} rakes the line end to end${s}.`]));return;}
+  if(r.curse){writeEntry('foe',vpick([
+    `${f.name} works something foul on ${r.curse}.`,
+    `${f.name} lays a bad word on ${r.curse}, who feels it land.`,
+    `Something cold settles over ${r.curse} — ${f.name}'s doing.`,
+    `${f.name} marks ${r.curse} with a hex nobody asked for.`]));return;}
+  /* the routine attack now reaches the log too — the enemy is SEEN to act, not just felt */
+  if(r.who!=null){
+    if(r.dmg>0){
+      const verb=r.heavy?vpick(['crashes into','lands a heavy blow on','batters','rocks','staggers'])
+        :vpick(['strikes','claws at','hacks at','lunges at','catches','swings on','gets a piece of']);
+      writeEntry(r.downed?'smite':'foe',`${f.name} ${verb} ${r.who} for ${r.dmg}${r.downed?` — ${r.who} goes down!`:'.'}`);
+      if(r.downed)SND.down();
+    }else{
+      writeEntry('plain',`${f.name} ${vpick(['swings at','lunges at','reaches for','snaps at'])} ${r.who}, and ${vpick(['misses','finds only air','is turned aside','glances off armor'])}.`);
+    }
+  }
 }
 function onDeath(m,by){
   m.alive=false;m.downed=false;if(G.tele)G.tele.deaths++;
@@ -1349,6 +1473,10 @@ function combatOutcome(){
 }
 async function endCombat(won){
   const cb=G.combat;const wasBoss=cb.boss;const foeName=cb.enemies[0]&&cb.enemies[0].name;
+  /* sim-only per-foe telemetry: which foes are present when the party wins vs wipes */
+  if(window.__sim&&window.__foeStat){[...new Set(cb.enemies.map(f=>f.name))].forEach(n=>{
+    const s=window.__foeStat[n]||(window.__foeStat[n]={f:0,w:0,downs:0});s.f++;if(!won)s.w++;
+    s.downs+=G.party.filter(m=>m.downed).length;});}
   G.combat=null;
   if(won){
     /* the fight is won — the fallen are left to the road (the graves system carries them);
@@ -1428,8 +1556,14 @@ function visitShop(){
   if(G.gold>=BAL.price.bigheal)buy(BAL.price.bigheal,()=>packAdd('bigheal',1),'a Greater Draught');
   if(G.gold>=BAL.price.bomb&&chance(0.5))buy(BAL.price.bomb,()=>packAdd('bomb',1),'a Fire Bomb');
   if(G.tele){G.tele.gSpend+=spent;G.tele.items+=bought.length;}
-  if(bought.length)writeEntry('mile',`At the waystation they spend ${spent} gold — ${bought.slice(0,4).join(', ')}${bought.length>4?', and more':''}. ${G.gold} left.`);
-  else writeEntry('plain',`A waystation. Nothing worth the coin, or no coin worth it. ${G.gold} gold in the purse.`);
+  if(bought.length)writeEntry('mile',vpick([
+    `At the waystation they spend ${spent} gold — ${bought.slice(0,4).join(', ')}${bought.length>4?', and more':''}. ${G.gold} left.`,
+    `The waystation trader is ${spent} gold richer and we are ${bought.slice(0,4).join(', ')} heavier. ${G.gold} in the purse.`,
+    `Business at the waystation: out ${spent} gold, in ${bought.slice(0,4).join(', ')}${bought.length>4?', and then some':''}. Down to ${G.gold}.`]));
+  else writeEntry('plain',vpick([
+    `A waystation. Nothing worth the coin, or no coin worth it. ${G.gold} gold in the purse.`,
+    `The waystation had shelves and prices and little else. We keep our ${G.gold} gold and our standards.`,
+    `We browse the waystation, buy nothing, leave with ${G.gold} gold and a vague sense of superiority.`]));
 }
 
 /* ============================ THE RIVAL'S ROAD ============================
@@ -1513,14 +1647,18 @@ async function beat(){
     case 'village':{await villageBeat();break;}
     case 'march':{await marchBeat();break;}
   }
-  /* the ration clock: hunger is a quiet enemy that never misses */
-  if(G.beats%18===0&&!G.over){
+  /* the ration clock: hunger is a quiet enemy that never misses — but nobody stops to eat mid-fight */
+  if(G.beats%18===0&&!G.over&&G.state!=='combat'){
     G.rations=Math.max(0,(G.rations||0)-Math.max(1,standing().length-(hasRelic('gluttonspoon')?1:0)));
     if(G.rations<=0){standing().forEach(m=>{m.morale=clamp(m.morale-3,0,100);m.hp=Math.max(1,m.hp-2);});
-      if(chance(0.5))writeEntry('plain',pick([
+      if(chance(0.5))writeEntry('plain',vpick([
         `The pack is out of food. Someone divides a heel of bread with courtroom precision.`,
         `No rations left. The march gets quieter and meaner by the mile.`,
-        `Dinner is a discussion of dinners past.`]));}
+        `Dinner is a discussion of dinners past.`,
+        `Empty pack. We chew the idea of food and find it unsatisfying.`,
+        `Hunger joins the party. It does not pull its weight and never leaves.`,
+        `The last crumbs are gone. Morale eats itself for a change.`,
+        `We ration the rationing. There is nothing to ration.`]));}
   }
   refreshUI();
   if(G.beats%22===0)regenSaga(); /* fire-and-forget; the story keeps itself */
@@ -1578,7 +1716,9 @@ async function marchBeat(){
     if(roll<fightP+0.16){await doEvent();return;}
     /* else just march */
   }
-  if(chance(0.5)){fact('march',{});await flush(false);}
+  /* the "we just walked" filler is texture, not substance — fire it sparingly so it never
+     drowns the log or cycles its pool visibly (it was the #1 repeat at chance 0.5) */
+  if(chance(0.22)){fact('march',{});await flush(false);}
 }
 function buildFoes(){
   const z=zone();const n=rnd(1,Math.min(3,1+Math.floor(z.tier/2)+(standing().length>2?1:0)));
@@ -1615,14 +1755,33 @@ async function roadChoice(){
     const bs=bestSkill('Stealth');
     if(bs.m&&bs.score+rf(0,8)+(hasRelic('hushcandle')?3:0)>=6+zone().tier*1.5){
       standing().forEach(x=>gainXP(x,2));
-      writeEntry('plain',`${said}They slip past ${label} through the ${zone().biome}, ${firstName(bs.m)} picking the route. Nothing bleeds. It still counts.`);return;}
+      writeEntry('plain',said+vpick([
+        `They slip past ${label} through the ${zone().biome}, ${firstName(bs.m)} picking the route. Nothing bleeds. It still counts.`,
+        `${firstName(bs.m)} finds a line through the ${zone().biome} and ${label} never looked up. We are getting good at not being seen, which is its own quiet horror.`,
+        `Past ${label} on held breath, ${firstName(bs.m)} leading. No glory, no wounds, no witnesses. We will take two of three.`,
+        `We go around ${label} entirely. ${firstName(bs.m)} calls it tactics; the dictionary calls it hiding. Both are correct.`,
+        `${label} never knew we were there. ${firstName(bs.m)} is insufferable about it for a mile, and has earned every word.`]));return;}
     living().forEach(m=>addSt(m,{k:'slow',n:1})); /* caught flat-footed */
-    writeEntry('smite',`${said}They try to slip past ${label} — and fail. Ambushed, weapons half-drawn.`);
+    writeEntry('smite',said+vpick([
+      `They try to slip past ${label} — and fail. Ambushed, weapons half-drawn.`,
+      `The quiet way past ${label} was neither quiet nor a way. Now it is a fight, and a rushed one.`,
+      `${firstName(bs.m)}'s clever route ends with ${label} directly in it. So much for clever.`,
+      `Three steps from unseen, and ${label} turned around. Steel, then, with no time to set our feet.`]));
     startCombat(foes,false,true);return;}
   if(choice==='detour'){
     G.dist=Math.max(0,G.dist-0.3);G.zoneDist=Math.max(0,G.zoneDist-0.3);
-    writeEntry('plain',`${said}They give ${label} a wide, dignified berth. The keep gets a little further away. So does dying.`);return;}
-  writeEntry('plain',`${said}Trouble on the road: ${label}. Weapons out.`);
+    writeEntry('plain',said+vpick([
+      `They give ${label} a wide, dignified berth. The keep gets a little further away. So does dying.`,
+      `We decline ${label} in writing and in person, and walk the long way. Cowardice keeps excellent company: us.`,
+      `A detour around ${label}. It costs us ground and dignity, in that order of preference.`,
+      `We look at ${label}, we look at the map, we choose the map. The keep waits; it is good at waiting.`,
+      `Around ${label} the slow way. Nobody dies of a detour is the entire argument, and it is enough.`]));return;}
+  writeEntry('plain',said+vpick([
+    `Trouble on the road: ${label}. Weapons out.`,
+    `${label}, blocking the way, unbothered. We ready ourselves to bother them.`,
+    `No going around this one — ${label} ahead, and the honest way is forward and loud.`,
+    `We meet ${label} the old-fashioned way, the new-fashioned way being full.`,
+    `${label} on the road, no clever exit in sight. We stop pretending we are subtle and draw.`]));
   startCombat(foes,false,true);
 }
 function advanceZone(){
@@ -1779,23 +1938,42 @@ async function villageBeat(){
         `The region: ${zone().name} (${zone().biome}), where ${foesLabel(zone().foes.map(n=>({name:n})))} are said to roam, and ${zone().boss} rules. Story so far: ${G.saga||'a march has begun'}.`,60);
       setMetab();rumor=(out||'').split('\n')[0].slice(0,160)||null;
     }catch(e){setMetab();}}
-    if(!rumor)rumor=pick([`They say ${zone().boss} counts its teeth every night and comes up short.`,
+    if(!rumor)rumor=vpick([`They say ${zone().boss} counts its teeth every night and comes up short.`,
       `A drover swears the ${zone().biome} has been rearranging itself when nobody watches.`,
-      `Nobody who owed money in ${v.name} has ever come back from ${zone().name}. Draw your own conclusions.`]);
+      `Nobody who owed money in ${v.name} has ever come back from ${zone().name}. Draw your own conclusions.`,
+      `The barkeep won't name ${zone().boss}, but keeps a chair empty just in case.`,
+      `They say the road east eats bootprints — walk it twice and you've never been.`,
+      `A pilgrim left ${v.name} for ${zone().name} singing. The song came back. She didn't.`]);
     G.rumor=rumor;
     writeEntry('talk',`The tavern in ${v.name}: “${rumor}”`);
     /* one vice per town, seeded */
     const roll=R();
     if(roll<0.35&&G.gold>=20){const stake=Math.max(8,Math.round(G.gold*0.15));
-      if(chance(0.5)){G.gold+=Math.round(stake*0.9);writeEntry('plain',`Dice in the back room. The party is up ${Math.round(stake*0.9)} gold and wisely quits.`);}
-      else{G.gold-=stake;G.tele.gSpend+=stake;writeEntry('plain',`Dice in the back room. ${stake} gold becomes a lesson about dice.`);}}
+      if(chance(0.5)){const won=Math.round(stake*0.9);G.gold+=won;writeEntry('plain',vpick([
+        `Dice in the back room. The party is up ${won} gold and wisely quits.`,
+        `A lucky night at the ${v.name} dice table: ${won} gold, pocketed before the luck notices.`,
+        `We win ${won} gold at dice and leave while the leaving is good and the locals are quiet.`]));}
+      else{G.gold-=stake;G.tele.gSpend+=stake;writeEntry('plain',vpick([
+        `Dice in the back room. ${stake} gold becomes a lesson about dice.`,
+        `The ${v.name} dice were friendly right up until they weren't. Down ${stake} gold, up one grudge.`,
+        `We donate ${stake} gold to the local dice economy. It is not tax-deductible.`]));}}
     else if(roll<0.6&&G.gold>=15){const tithe=Math.max(6,Math.round(G.gold*0.12));G.gold-=tithe;G.tele.gSpend+=tithe;
       standing().forEach(m=>{m.faith=clamp(m.faith+6,0,100);m.morale=clamp(m.morale+4,0,100);});
-      writeEntry('holy',`We tithe ${tithe} gold at the village shrine. No acknowledgment arrives. We log it as an investment.`);}
+      writeEntry('holy',vpick([
+        `We tithe ${tithe} gold at the village shrine. No acknowledgment arrives. We log it as an investment.`,
+        `${tithe} gold to the shrine in ${v.name}. The god's silence is at least consistent. We feel oddly better.`,
+        `We leave ${tithe} gold at the altar. Receipt pending, as ever. The party stands a little straighter anyway.`]));}
     else{const bard=standing().find(m=>m.cls==='Bard');
       if(bard){const earn=rnd(6,14)+bard.attr.cha;G.gold+=earn;G.tele.gEarn+=earn;
-        writeEntry('plain',`${firstName(bard)} busks. ${v.name} pays ${earn} gold — some of it to make it stop.`);}
-      else writeEntry('plain',`A quiet evening under a roof that isn't sky. Nobody says how much they needed it.`);}
+        writeEntry('plain',vpick([
+          `${firstName(bard)} busks. ${v.name} pays ${earn} gold — some of it to make it stop.`,
+          `${firstName(bard)} sings for coins in ${v.name}. ${earn} gold, half applause and half bribery.`,
+          `${firstName(bard)} works the square and comes back ${earn} gold richer and entirely unrepentant.`]));}
+      else writeEntry('plain',vpick([
+        `A quiet evening under a roof that isn't sky. Nobody says how much they needed it.`,
+        `A night indoors in ${v.name}. Walls, warmth, and the strange guilt of comfort.`,
+        `We spend the evening not being rained on. It is the best thing that has happened in days.`,
+        `${v.name} gives us a dry floor and no reason to draw a weapon. We take both, gratefully.`]));}
     v.did++;return;}
   /* last turn: a notice board, and sometimes a local with a spear */
   if(!G.sidequest&&chance(0.6)){
@@ -1830,10 +2008,22 @@ async function campBeat(){
     else if(G.pet&&chance(0.22)){G.pet.finds++;
       const roll=R();
       if(roll<0.4&&G.pack.length<BAL.packCap){packAdd('heal',1);
-        writeEntry('plain',`${G.pet.name} returns from the dark carrying a healing draught. We do not ask. ${G.pet.name} does not tell.`);}
+        writeEntry('plain',vpick([
+          `${G.pet.name} returns from the dark carrying a healing draught. We do not ask. ${G.pet.name} does not tell.`,
+          `${G.pet.name} drops a healing draught at the fire, tail going, expecting nothing and deserving everything.`,
+          `A healing draught, delivered by ${G.pet.name} with the solemnity of a state gift.`,
+          `${G.pet.name} found a draught out there in the black. We have stopped questioning the ${G.pet.kind}'s sources.`]));}
       else if(roll<0.7){const g=rnd(3,9);G.gold+=g;G.tele.gEarn+=g;
-        writeEntry('plain',`${G.pet.name} has dug up ${g} gold. The ${G.pet.kind} economy is thriving.`);}
-      else writeEntry('plain',`${G.pet.name} presents us with one (1) ${vpick(SEED1.loot)}. It is placed on the ledger under "assets, emotional."`);}
+        writeEntry('plain',vpick([
+          `${G.pet.name} has dug up ${g} gold. The ${G.pet.kind} economy is thriving.`,
+          `${G.pet.name} unearths ${g} gold from somewhere and accepts no questions about it.`,
+          `${g} gold, muddy and warm, deposited at our feet by ${G.pet.name}. We launder it in the usual way: spending.`,
+          `The ${G.pet.kind} returns richer than we are — ${g} gold, surrendered to the common purse under protest.`]));}
+      else writeEntry('plain',vpick([
+        `${G.pet.name} presents us with one (1) ${vpick(SEED1.loot)}. It is placed on the ledger under "assets, emotional."`,
+        `${G.pet.name} brings back ${vpick(SEED1.loot)}. Useless, beloved, kept.`,
+        `A gift from ${G.pet.name}: ${vpick(SEED1.loot)}. Nobody has the heart to leave it behind.`,
+        `${G.pet.name} lays ${vpick(SEED1.loot)} before us like tribute. We are, apparently, its subjects.`]));}
     G.camp=null;G.state='march';}
 }
 async function campTalk(){
@@ -1849,7 +2039,7 @@ async function campTalk(){
         rl.bond?'they are sworn back-to-back companions':rl.feud?'there is a feud neither will name':''
        ].filter(Boolean).join('; ');
       const out=await callLLM(
-        `Two companions on a doomed-or-glorious quest talk at the fire. ${voiceBlock()}\n${a.name} is ${a.trait}, motto "${a.motto||'none'}"${a.epithet?' ('+a.epithet+')':''}; ${b.name} is ${b.trait}, motto "${b.motto||'none'}"${b.epithet?' ('+b.epithet+')':''}. Standing: ${rl.aff>12?'close':rl.aff<0?'friction':'wary allies'}${hist?' — '+hist:''}. Topic tonight: ${topic}. Let the conversation BUILD on their history — a callback, a promise kept or dodged, an old argument resumed. Write 2-3 short lines as "Name: line". Then on a final line ONLY JSON: {"delta":<-3..3>,"note":"<=8 words, where they stand now"}.`,
+        `Two companions on a doomed-or-glorious quest talk at the fire. ${voiceBlock()}\nThey are DIFFERENT PEOPLE — write each in their own distinct voice, and let their bearings/pasts/drives rub against each other (that friction or fondness IS the scene).\n${a.name}${a.epithet?' ('+a.epithet+')':''} — ${persona(a)}.\n${b.name}${b.epithet?' ('+b.epithet+')':''} — ${persona(b)}.\nStanding: ${rl.aff>12?'close':rl.aff<0?'friction':'wary allies'}${hist?' — '+hist:''}. Topic tonight: ${topic}. Build on their history — a callback, a promise kept or dodged, an old argument resumed; one of them should sound nothing like the other. Write 2-3 short lines as "Name: line". Then on a final line ONLY JSON: {"delta":<-3..3>,"note":"<=8 words, where they stand now"}.`,
         `Story so far: ${G.saga||'It has only just begun.'}\n${gagBlock()}Recent: ${G.chron.slice(-2).map(e=>e.t).join(' | ')}. The god watches and has never once answered; current doctrine: "${G.god.doctrine}"`,200);
       setMetab();rl.lastTopic=topic;
       const jm=out.match(/\{[\s\S]*\}\s*$/);
@@ -1865,7 +2055,7 @@ async function campTalk(){
     }catch(e){setMetab();}
   }
   rl.aff=clamp(rl.aff+rnd(-1,2),-30,40);relShift(a,b,rl);
-  writeEntry('talk',pick([
+  writeEntry('talk',vpick([
     `${firstName(a)} and ${firstName(b)} argue about ${topic}. Neither wins. Both feel better.`,
     `${firstName(a)} tells ${firstName(b)} a story about ${topic}. It is mostly untrue and entirely welcome.`,
     `${firstName(a)} and ${firstName(b)} sit with ${topic} and say little. It is enough.`,
@@ -2694,6 +2884,7 @@ function renderParty(){const el=document.getElementById('party');
     return `<div class="pcard ${G.selId===m.id?'sel':''} ${m.downed?'downed':''}" data-id="${m.id}">
       <img class="pt" src="${portraitOf(m)}" alt="">
       <span class="nm">${esc(firstName(m))}${m.epithet?', <i>'+esc(m.epithet)+'</i>':''}</span> <span class="cls">${m.hero?'★ ':''}${m.cls} · lv${m.level} · ${m.trait}</span>
+      ${m.bearing?`<div class="dim" style="font-style:italic;color:#8a7ea8">${esc(m.bearing)} · ${esc(m.past||'')} · ${esc(m.drive||'')}</div>`:''}
       <div><span class="dim">hp</span> ${bar(70,m.hp/m.hpMax,'#c03a2a')} <span class="dim">${Math.round(m.hp)}/${m.hpMax}</span>
         <span class="dim">mp</span> ${bar(40,m.mp/Math.max(1,m.mpMax),'#3a6ab0')}
         <span class="dim">sp</span> ${bar(40,(m.sp||0)/Math.max(1,m.spMax),'#8a9a3a')}</div>
@@ -2847,6 +3038,9 @@ function migrate(g){
   if(!g.relics)g.relics=[];
   if(!g.vialFx)g.vialFx=VIAL_FX[0];
   if(g.vialKnown==null)g.vialKnown=false;
+  /* pre-matrix companions get a personality drawn now, so old parties stop sounding identical */
+  (g.party||[]).forEach(m=>{if(!m.bearing)m.bearing=vpick(BEARINGS);if(!m.past)m.past=vpick(PASTS);
+    if(!m.drive)m.drive=vpick(DRIVES);if(!m.quirk)m.quirk=vpick(QUIRKS);});
 }
 
 /* settings UI */
